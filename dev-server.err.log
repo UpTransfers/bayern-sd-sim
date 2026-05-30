@@ -1,0 +1,172 @@
+⨯ Error: EPERM: operation not permitted, rename 'C:\Users\Admin\Documents\Bayern sporting director\bayern-sd-sim\data\sim-store.json.1780130841887.tmp' -> 'C:\Users\Admin\Documents\Bayern sporting director\bayern-sd-sim\data\sim-store.json'
+    at async writeStore (src\lib\storage.ts:161:3)
+    at async (src\lib\storage.ts:168:5)
+  159 |   const tempPath = `${storePath}.${Date.now()}.tmp`;
+  160 |   await fs.writeFile(tempPath, JSON.stringify(store, null, 2), "utf8");
+> 161 |   await fs.rename(tempPath, storePath);
+      |   ^
+  162 | }
+  163 |
+  164 | export async function mutateStore(mutator: (store: Store) => void | Promise<void>) { {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'rename',
+  path: 'C:\\Users\\Admin\\Documents\\Bayern sporting director\\bayern-sd-sim\\data\\sim-store.json.1780130841887.tmp',
+  dest: 'C:\\Users\\Admin\\Documents\\Bayern sporting director\\bayern-sd-sim\\data\\sim-store.json'
+}
+⨯ Error: EPERM: operation not permitted, rename 'C:\Users\Admin\Documents\Bayern sporting director\bayern-sd-sim\data\sim-store.json.1780131502969.tmp' -> 'C:\Users\Admin\Documents\Bayern sporting director\bayern-sd-sim\data\sim-store.json'
+    at async writeStore (src\lib\storage.ts:161:3)
+    at async (src\lib\storage.ts:168:5)
+  159 |   const tempPath = `${storePath}.${Date.now()}.tmp`;
+  160 |   await fs.writeFile(tempPath, JSON.stringify(store, null, 2), "utf8");
+> 161 |   await fs.rename(tempPath, storePath);
+      |   ^
+  162 | }
+  163 |
+  164 | export async function mutateStore(mutator: (store: Store) => void | Promise<void>) { {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'rename',
+  path: 'C:\\Users\\Admin\\Documents\\Bayern sporting director\\bayern-sd-sim\\data\\sim-store.json.1780131502969.tmp',
+  dest: 'C:\\Users\\Admin\\Documents\\Bayern sporting director\\bayern-sd-sim\\data\\sim-store.json'
+}
+[browser] ⨯ unhandledRejection: Error: Simulation failed
+    at simulateAgain (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/src_09.l5e-._.js:4937:23)
+⨯ ./src/components/SeasonReportPage.tsx:10:1
+Module not found: Can't resolve 'html-to-image'
+  [90m 8 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m"@/components/ui/button"[0m;
+  [90m 9 |[0m [36mimport[0m { [33mBayernBadge[0m } [36mfrom[0m [32m"@/components/BayernBadge"[0m;
+[31m[1m>[0m [90m10 |[0m [36mimport[0m { toPng } [36mfrom[0m [32m"html-to-image"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m11 |[0m [36mimport[0m [36mtype[0m { [33mSimulationSummary[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+  [90m12 |[0m [36mimport[0m { formatCurrencyMillions, ordinal } [36mfrom[0m [32m"@/lib/utils"[0m;
+  [90m13 |[0m [36mimport[0m { bundesligaProjectedTable } [36mfrom[0m [32m"@/lib/data/bayern2026"[0m;
+
+
+
+Import traces:
+  Client Component Browser:
+    ./src/components/SeasonReportPage.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/SeasonReportPage.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/SeasonReportPage.tsx:10:1
+Module not found: Can't resolve 'html-to-image'
+  [90m 8 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m"@/components/ui/button"[0m;
+  [90m 9 |[0m [36mimport[0m { [33mBayernBadge[0m } [36mfrom[0m [32m"@/components/BayernBadge"[0m;
+[31m[1m>[0m [90m10 |[0m [36mimport[0m { toPng } [36mfrom[0m [32m"html-to-image"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m11 |[0m [36mimport[0m [36mtype[0m { [33mSimulationSummary[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+  [90m12 |[0m [36mimport[0m { formatCurrencyMillions, ordinal } [36mfrom[0m [32m"@/lib/utils"[0m;
+  [90m13 |[0m [36mimport[0m { bundesligaProjectedTable } [36mfrom[0m [32m"@/lib/data/bayern2026"[0m;
+
+
+
+Import traces:
+  Client Component Browser:
+    ./src/components/SeasonReportPage.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/SeasonReportPage.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/SeasonReportPage.tsx:10:1
+Module not found: Can't resolve 'html-to-image'
+  [90m 8 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m"@/components/ui/button"[0m;
+  [90m 9 |[0m [36mimport[0m { [33mBayernBadge[0m } [36mfrom[0m [32m"@/components/BayernBadge"[0m;
+[31m[1m>[0m [90m10 |[0m [36mimport[0m { toPng } [36mfrom[0m [32m"html-to-image"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m11 |[0m [36mimport[0m [36mtype[0m { [33mSimulationSummary[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+  [90m12 |[0m [36mimport[0m { formatCurrencyMillions, ordinal } [36mfrom[0m [32m"@/lib/utils"[0m;
+  [90m13 |[0m [36mimport[0m { bundesligaProjectedTable } [36mfrom[0m [32m"@/lib/data/bayern2026"[0m;
+
+
+
+Import traces:
+  Client Component Browser:
+    ./src/components/SeasonReportPage.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/SeasonReportPage.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/SeasonReportPage.tsx:10:1
+Module not found: Can't resolve 'html-to-image'
+  [90m 8 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m"@/components/ui/button"[0m;
+  [90m 9 |[0m [36mimport[0m { [33mBayernBadge[0m } [36mfrom[0m [32m"@/components/BayernBadge"[0m;
+[31m[1m>[0m [90m10 |[0m [36mimport[0m { toPng } [36mfrom[0m [32m"html-to-image"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m11 |[0m [36mimport[0m [36mtype[0m { [33mSimulationSummary[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+  [90m12 |[0m [36mimport[0m { formatCurrencyMillions, ordinal } [36mfrom[0m [32m"@/lib/utils"[0m;
+  [90m13 |[0m [36mimport[0m { bundesligaProjectedTable } [36mfrom[0m [32m"@/lib/data/bayern2026"[0m;
+
+
+
+Import traces:
+  Client Component Browser:
+    ./src/components/SeasonReportPage.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Client Component Browser]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/SeasonReportPage.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Client Component SSR]
+    ./src/components/ResultsPageClient.tsx [Server Component]
+    ./src/app/results/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[browser] Uncaught ReferenceError: StatChip is not defined
+    at SeasonReportPage (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/src_09.l5e-._.js?id=%255Bproject%255D%252Fsrc%252Fcomponents%252FSeasonReportPage.tsx+%255Bapp-client%255D+%2528ecmascript%2529:727:260)
+    at Object.react_stack_bottom_frame (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15037:24)
+    at renderWithHooks (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4620:24)
+    at updateFunctionComponent (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6081:21)
+    at beginWork (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6691:24)
+    at runWithFiberInDEV (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at performUnitOfWork (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9555:97)
+    at workLoopSync (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9449:40)
+    at renderRootSync (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9433:13)
+    at performWorkOnRoot (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9061:186)
+    at performSyncWorkOnRoot (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10263:9)
+    at flushSyncWorkAcrossRoots_impl (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10179:316)
+    at processRootScheduleInMicrotask (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10200:106)
+    at <unknown> (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10274:158)
+    at ResultsPageClient (file://C:/Users/Admin/Documents/Bayern sporting director/bayern-sd-sim/.next/dev/static/chunks/src_09.l5e-._.js:6233:214)
+    at ResultsPage (src\app\results\page.tsx:7:7)
+   5 |   return (
+   6 |     <Suspense fallback={<div className="min-h-screen bg-[linear-gradient(180deg,#f7f7fb,wh...
+>  7 |       <ResultsPageClient />
+     |       ^
+   8 |     </Suspense>
+   9 |   );
+  10 | }
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
