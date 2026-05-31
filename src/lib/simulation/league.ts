@@ -1,7 +1,7 @@
 import { bundesligaProjectedTable, bundesligaCupModel, pokalModel, uclTitleModel } from "../data/bayern2026";
 import { bundesligaLeagueModel } from "../data/bundesliga2026";
 import type { BundesligaProjectedRow, CompetitionTeamModel } from "../data/bayern2026";
-import type { SimulationSummary, TacticalSettings } from "../types";
+import type { SeasonMatchResult, SimulationSummary, TacticalSettings } from "../types";
 import { clamp } from "../utils";
 import { normalizeTactics, tacticalImpact } from "./tactics";
 import { deriveRosterEntryProfile } from "../football/playerModel";
@@ -15,6 +15,7 @@ export type CompetitionOutcome = {
   winner: string;
   opponent?: string | null;
   rounds?: Array<{ round: string; opponent: string; score: string; result: "W" | "D" | "L"; winner?: string }>;
+  matchResults?: SeasonMatchResult[];
   leaguePhasePoints?: number;
   leaguePhaseRank?: number;
   narrative?: string;
@@ -65,11 +66,12 @@ export type CompetitionSimulation = {
   bayernRow: BundesligaProjectedRow;
   bayernPlace: number;
   notes: string[];
+  matchResults: SeasonMatchResult[];
 };
 
 export function simulateBundesligaSeason(
   summary: SimulationSummary,
-  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number },
+  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; finishPoints?: number },
   impact: ReturnType<typeof tacticalImpact>,
   runSalt = "",
 ): CompetitionSimulation {
@@ -81,6 +83,7 @@ export function simulateBundesligaSeason(
   const states = new Map(profiles.map((profile) => [profile.club, toState(profile)]));
   const schedule = buildDoubleRoundRobin(profiles.map((profile) => profile.club));
   const notes: string[] = [];
+  const matchResults: SeasonMatchResult[] = [];
 
   for (let roundIndex = 0; roundIndex < schedule.length; roundIndex += 1) {
     const round = schedule[roundIndex];
@@ -89,6 +92,23 @@ export function simulateBundesligaSeason(
       const away = states.get(match.away);
       if (!home || !away) continue;
       const outcome = simulateLeagueMatch(home, away, roundIndex, rng, summary, tactics, impact, setPiecePlan);
+      if (match.home === "Bayern Munich" || match.away === "Bayern Munich") {
+        const bayernHome = match.home === "Bayern Munich";
+        matchResults.push({
+          matchId: `bundesliga-${roundIndex + 1}-${match.home}-${match.away}`,
+          competition: "bundesliga",
+          round: `Matchday ${roundIndex + 1}`,
+          opponent: bayernHome ? match.away : match.home,
+          home: bayernHome,
+          scoreFor: bayernHome ? outcome.homeGoals : outcome.awayGoals,
+          scoreAgainst: bayernHome ? outcome.awayGoals : outcome.homeGoals,
+          extraTime: false,
+          penalties: false,
+          xgFor: Number((bayernHome ? outcome.homeXg : outcome.awayXg).toFixed(2)),
+          xgAgainst: Number((bayernHome ? outcome.awayXg : outcome.homeXg).toFixed(2)),
+          turningPoint: outcome.note,
+        });
+      }
       applyMatchResult(home, away, outcome);
     }
     for (const state of states.values()) {
@@ -115,8 +135,9 @@ export function simulateBundesligaSeason(
 
   const bayernRow = table.find((row) => row.club === "Bayern Munich") ?? table[0] ?? bundesligaProjectedTable[0];
   const bayernPlace = table.findIndex((row) => row.club === "Bayern Munich") + 1 || 1;
+  const reconciledMatchResults = reconcileBayernLeagueMatches(matchResults, bayernRow, rng);
   notes.push(`Bundesliga race settled by ${bayernRow.pts} points and a goal difference of ${formatSigned(bayernRow.gf - bayernRow.ga)}.`);
-  return { table, bayernRow, bayernPlace, notes };
+  return { table, bayernRow, bayernPlace, notes, matchResults: reconciledMatchResults };
 }
 
 export function simulatePokalOutcome(
@@ -142,6 +163,7 @@ export function simulatePokalOutcome(
   let lastScore = "0-0";
   let lastOpponent = "Opponent";
   const path: CompetitionOutcome["rounds"] = [];
+  const matchResults: SeasonMatchResult[] = [];
   for (const [index, round] of rounds.entries()) {
     const opponent = choosePokalOpponent(round, rng);
     const opponentPower = clamp(opponent.power + seededVariance(rng, -7, 7), 42, 92);
@@ -161,6 +183,21 @@ export function simulatePokalOutcome(
     lastScore = tie.score;
     lastOpponent = opponent.club;
     path.push({ round: round.name, opponent: opponent.club, score: tie.score, result: tie.bayernWon ? "W" : "L", winner: tie.bayernWon ? "Bayern Munich" : opponent.club });
+    matchResults.push(
+      buildKnockoutMatchResult({
+        competition: "pokal",
+        round: round.name,
+        opponent: opponent.club,
+        home: true,
+        score: tie.score,
+        won: tie.bayernWon,
+        extraTime: tie.extraTime,
+        penalties: tie.penalties,
+        basePower: bayernPower,
+        opponentPower,
+        lowerLeague: round.lowerLeague,
+      }),
+    );
     if (!tie.bayernWon) {
       return {
         round: round.name,
@@ -168,6 +205,7 @@ export function simulatePokalOutcome(
         winner: opponent.club,
         opponent: opponent.club,
         rounds: path,
+        matchResults,
         narrative: `Bayern exited in the ${round.name.toLowerCase()} after a variance-heavy cup tie.`,
       } satisfies CompetitionOutcome;
     }
@@ -179,13 +217,14 @@ export function simulatePokalOutcome(
     winner: "Bayern Munich",
     opponent: lastOpponent,
     rounds: path,
+    matchResults,
     narrative: "Bayern survived the cup bracket and lifted the trophy.",
   } satisfies CompetitionOutcome;
 }
 
 export function simulateUclOutcome(
   summary: SimulationSummary,
-  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number },
+  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; finishPoints?: number },
   impact: ReturnType<typeof tacticalImpact>,
   runSalt = "",
 ) {
@@ -199,6 +238,7 @@ export function simulateUclOutcome(
   const leaguePhaseRank = leaguePhasePoints.rank;
   const qualifiesDirectly = leaguePhaseRank <= 8;
   const reachesPlayoff = leaguePhaseRank <= 24;
+  const matchResults: SeasonMatchResult[] = [];
   if (!reachesPlayoff) {
     const leaguePhaseOpponent = chooseOpponentFromPool(pool, 92, rng);
     return {
@@ -207,6 +247,7 @@ export function simulateUclOutcome(
       winner: leaguePhaseOpponent.club,
       opponent: leaguePhaseOpponent.club,
       rounds: [{ round: "League phase", opponent: leaguePhaseOpponent.club, score: `${leaguePhasePoints.points} pts`, result: "L", winner: leaguePhaseOpponent.club }],
+      matchResults,
       leaguePhasePoints: leaguePhasePoints.points,
       leaguePhaseRank,
       narrative: "Bayern failed to reach the knockout phase after an uneven league phase.",
@@ -235,6 +276,7 @@ export function simulateUclOutcome(
         winner: playoffOpponent.club,
         opponent: playoffOpponent.club,
         rounds: [{ round: "Playoff", opponent: playoffOpponent.club, score: playoffTie.score, result: "L", winner: playoffOpponent.club }],
+        matchResults,
         leaguePhasePoints: leaguePhasePoints.points,
         leaguePhaseRank,
         narrative: "Bayern were pushed out in the playoff layer after a volatile bracket draw.",
@@ -242,6 +284,22 @@ export function simulateUclOutcome(
     }
     wonPlayoffOpponent = playoffOpponent.club;
     wonPlayoffScore = playoffTie.score;
+    matchResults.push(
+      buildKnockoutMatchResult({
+        competition: "ucl",
+        round: "Playoff",
+        opponent: playoffOpponent.club,
+        home: true,
+        score: playoffTie.score,
+        won: true,
+        extraTime: playoffTie.extraTime,
+        penalties: playoffTie.penalties,
+        basePower: bayernPower,
+        opponentPower: playoffOpponent.power,
+        lowerLeague: false,
+        eliteOpponent: true,
+      }),
+    );
   }
 
   const knockoutRounds = [
@@ -287,6 +345,22 @@ export function simulateUclOutcome(
     lastScore = tie.score;
     lastOpponent = opponent.club;
     path.push({ round: round.name, opponent: opponent.club, score: tie.score, result: tie.bayernWon ? "W" : "L", winner: tie.bayernWon ? "Bayern Munich" : opponent.club });
+    matchResults.push(
+      buildKnockoutMatchResult({
+        competition: "ucl",
+        round: round.name,
+        opponent: opponent.club,
+        home: true,
+        score: tie.score,
+        won: tie.bayernWon,
+        extraTime: tie.extraTime,
+        penalties: tie.penalties,
+        basePower: bayernPower,
+        opponentPower,
+        lowerLeague: false,
+        eliteOpponent: true,
+      }),
+    );
     if (!tie.bayernWon) {
       return {
         round: round.name,
@@ -294,6 +368,7 @@ export function simulateUclOutcome(
         winner: opponent.club,
         opponent: opponent.club,
         rounds: path,
+        matchResults,
         leaguePhasePoints: leaguePhasePoints.points,
         leaguePhaseRank,
         narrative: `Bayern fell in the ${round.name.toLowerCase()} after a tight knockout swing.`,
@@ -307,6 +382,7 @@ export function simulateUclOutcome(
     winner: "Bayern Munich",
     opponent: lastOpponent,
     rounds: path,
+    matchResults,
     leaguePhasePoints: leaguePhasePoints.points,
     leaguePhaseRank,
     narrative: "Bayern navigated the league phase and won the knockout bracket.",
@@ -498,7 +574,7 @@ function calibrateLeagueTable(
   states: Map<string, LeagueTeamState>,
   profiles: LeagueTeamProfile[],
   summary: SimulationSummary,
-  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number },
+  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; finishPoints?: number },
   impact: ReturnType<typeof tacticalImpact>,
   tactics: TacticalSettings,
   rng: () => number,
@@ -537,7 +613,8 @@ function calibrateLeagueTable(
     if (isBayern) {
       const eliteBase = clamp(
         Math.round(
-          78 +
+          82 +
+            ((derived.finishPoints ?? 78) - 78) * 0.35 +
             (lineupImpact.startingQuality - 80) * 0.42 +
             (lineupImpact.control - 70) * 0.16 +
             (lineupImpact.threat - 70) * 0.14 +
@@ -548,13 +625,23 @@ function calibrateLeagueTable(
             derived.injuryRisk * 0.06 -
             impact.risk * 0.05 +
             summary.signings.length * 0.2 +
-            blendNoise * 3.2,
+            blendNoise * 4.4,
         ),
-        74,
-        88,
+        70,
+        91,
       );
-      const pointFloor = lineupImpact.outOfPositionCount <= 1 ? 78 : 74;
-      const pointTarget = clamp(Math.round(eliteBase + (state.points - prior.pts) * 0.02 + seededVariance(rng, -1.2, 1.6)), pointFloor, 91);
+      const pointFloor = clamp(
+        Math.round(
+          72 +
+            (lineupImpact.startingQuality - 78) * 0.22 +
+            (lineupImpact.benchQuality - 74) * 0.08 -
+            lineupImpact.outOfPositionCount * 1.4 -
+            derived.injuryRisk * 0.05,
+        ),
+        68,
+        80,
+      );
+      const pointTarget = clamp(Math.round(eliteBase + (state.points - prior.pts) * 0.04 + seededVariance(rng, -4.6, 5.2)), pointFloor, 93);
       draws = clamp(Math.round(state.draws * 0.58 + prior.d * 0.18 + blendNoise * 0.65), 2, 13);
       wins = clamp(Math.round((pointTarget - draws) / 3), 20, 33);
       points = wins * 3 + draws;
@@ -566,15 +653,16 @@ function calibrateLeagueTable(
       goalsFor = clamp(Math.round(72 + (pointTarget - 72) * 1.08 + (lineupImpact.threat - 72) * 0.28 + blendNoise * 2.4), 64, 118);
       losses = Math.max(0, 34 - wins - draws);
     } else {
-      let pointTarget = clamp(
-        Math.round(prior.pts * priorWeight + state.points * rawWeight + tacticalPoints + state.seasonSwing * 0.18 + blendNoise * 2),
-        18,
-        90,
-      );
-      const topSixCap = prior.pos <= 2 ? prior.pts + 7 : prior.pos <= 4 ? prior.pts + 8 : prior.pos <= 6 ? prior.pts + 7 : prior.pts + 10;
-      const floor = prior.pos <= 6 ? prior.pts - 10 : prior.pts - 13;
-      const priorBlend = prior.pos <= 3 ? 0.45 : prior.pos <= 6 ? 0.35 : 0.25;
-      pointTarget = clamp(Math.round(pointTarget * (1 - priorBlend) + prior.pts * priorBlend), floor, topSixCap);
+    let pointTarget = clamp(
+      Math.round(prior.pts * priorWeight + state.points * rawWeight + tacticalPoints + state.seasonSwing * 0.18 + blendNoise * 2),
+      18,
+      90,
+    );
+    const topSixCap = prior.pos <= 2 ? prior.pts + 5 : prior.pos <= 4 ? prior.pts + 6 : prior.pos <= 6 ? prior.pts + 4 : prior.pts + 9;
+    const floor = prior.pos <= 6 ? prior.pts - 14 : prior.pts - 16;
+    const priorBlend = prior.pos <= 3 ? 0.42 : prior.pos <= 6 ? 0.3 : 0.22;
+    const tierDrag = prior.pos <= 2 ? 0 : prior.pos <= 4 ? 2 : prior.pos <= 6 ? 4 : 5;
+    pointTarget = clamp(Math.round(pointTarget * (1 - priorBlend) + prior.pts * priorBlend - tierDrag + Math.max(-3, Math.min(3, profile.rating - 74) * 0.08)), floor, topSixCap);
       const drawTarget = clamp(Math.round(prior.d * priorWeight + state.draws * rawWeight + blendNoise * 0.6), 2, 16);
       wins = clamp(Math.round((pointTarget - drawTarget) / 3), 0, 34);
       draws = clamp(drawTarget, 0, Math.max(0, 34 - wins));
@@ -743,6 +831,131 @@ function applyMatchResult(home: LeagueTeamState, away: LeagueTeamState, outcome:
   away.form = clamp(away.form + (outcome.awayGoals - outcome.homeGoals) * 1.1 + away.morale * 0.06, 36, 96);
 }
 
+function reconcileBayernLeagueMatches(
+  matches: SeasonMatchResult[],
+  bayernRow: Pick<BundesligaProjectedRow, "w" | "d" | "l" | "gf" | "ga">,
+  rng: () => number,
+) {
+  const leagueMatches = matches.filter((match) => match.competition === "bundesliga");
+  if (leagueMatches.length !== 34) return matches;
+
+  const ranked = [...leagueMatches]
+    .map((match, index) => ({
+      match,
+      index,
+      score: match.scoreFor - match.scoreAgainst + match.xgFor - match.xgAgainst + seededVariance(rng, -0.35, 0.35),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const outcomeById = new Map<string, "W" | "D" | "L">();
+  ranked.forEach((entry, index) => {
+    if (index < bayernRow.w) outcomeById.set(entry.match.matchId, "W");
+    else if (index < bayernRow.w + bayernRow.d) outcomeById.set(entry.match.matchId, "D");
+    else outcomeById.set(entry.match.matchId, "L");
+  });
+
+  const adjusted = leagueMatches.map((match) => {
+    const outcome = outcomeById.get(match.matchId) ?? "D";
+    const profile = makeScoreForOutcome(outcome, rng);
+    return {
+      ...match,
+      scoreFor: profile.scoreFor,
+      scoreAgainst: profile.scoreAgainst,
+      xgFor: Number(clamp(profile.scoreFor + seededVariance(rng, -0.45, 0.65), 0.15, 4.9).toFixed(2)),
+      xgAgainst: Number(clamp(profile.scoreAgainst + seededVariance(rng, -0.4, 0.55), 0.05, 4.4).toFixed(2)),
+      turningPoint: outcome === "W" ? winTurningPoint(rng) : outcome === "D" ? drawTurningPoint(rng) : lossTurningPoint(rng),
+    };
+  });
+
+  fitGoalTotals(adjusted, bayernRow.gf, bayernRow.ga, rng);
+  const byId = new Map(adjusted.map((match) => [match.matchId, match]));
+  return matches.map((match) => byId.get(match.matchId) ?? match);
+}
+
+function makeScoreForOutcome(outcome: "W" | "D" | "L", rng: () => number) {
+  if (outcome === "W") {
+    const scoreAgainst = weightedPick([0, 0, 1, 1, 1, 2], rng);
+    const scoreFor = scoreAgainst + weightedPick([1, 2, 2, 2, 3, 3, 4], rng);
+    return { scoreFor, scoreAgainst };
+  }
+  if (outcome === "D") {
+    const goals = weightedPick([0, 1, 1, 1, 2, 2, 3], rng);
+    return { scoreFor: goals, scoreAgainst: goals };
+  }
+  const scoreFor = weightedPick([0, 0, 1, 1, 1, 2], rng);
+  const scoreAgainst = scoreFor + weightedPick([1, 1, 2, 2, 3], rng);
+  return { scoreFor, scoreAgainst };
+}
+
+function fitGoalTotals(matches: SeasonMatchResult[], targetFor: number, targetAgainst: number, rng: () => number) {
+  let guard = 0;
+  while (sumGoals(matches, "scoreFor") < targetFor && guard < 500) {
+    guard += 1;
+    const match = pickAdjustable(matches, "addFor", rng);
+    if (!match) break;
+    match.scoreFor += 1;
+    match.xgFor = Number(clamp(match.xgFor + 0.42, 0.15, 5.4).toFixed(2));
+  }
+  while (sumGoals(matches, "scoreFor") > targetFor && guard < 1000) {
+    guard += 1;
+    const match = pickAdjustable(matches, "removeFor", rng);
+    if (!match) break;
+    match.scoreFor -= 1;
+    match.xgFor = Number(clamp(match.xgFor - 0.34, 0.15, 5.4).toFixed(2));
+  }
+  while (sumGoals(matches, "scoreAgainst") < targetAgainst && guard < 1500) {
+    guard += 1;
+    const match = pickAdjustable(matches, "addAgainst", rng);
+    if (!match) break;
+    match.scoreAgainst += 1;
+    match.xgAgainst = Number(clamp(match.xgAgainst + 0.38, 0.05, 4.9).toFixed(2));
+  }
+  while (sumGoals(matches, "scoreAgainst") > targetAgainst && guard < 2000) {
+    guard += 1;
+    const match = pickAdjustable(matches, "removeAgainst", rng);
+    if (!match) break;
+    match.scoreAgainst -= 1;
+    match.xgAgainst = Number(clamp(match.xgAgainst - 0.3, 0.05, 4.9).toFixed(2));
+  }
+}
+
+function pickAdjustable(matches: SeasonMatchResult[], mode: "addFor" | "removeFor" | "addAgainst" | "removeAgainst", rng: () => number) {
+  const candidates = matches.filter((match) => {
+    const win = match.scoreFor > match.scoreAgainst;
+    const loss = match.scoreFor < match.scoreAgainst;
+    if (mode === "addFor") return win || (loss && match.scoreFor + 1 < match.scoreAgainst);
+    if (mode === "removeFor") return (win && match.scoreFor - 1 > match.scoreAgainst && match.scoreFor > 1) || (loss && match.scoreFor > 0);
+    if (mode === "addAgainst") return loss || (win && match.scoreAgainst + 1 < match.scoreFor);
+    return (win && match.scoreAgainst > 0) || (loss && match.scoreAgainst - 1 > match.scoreFor && match.scoreAgainst > 1);
+  });
+  if (!candidates.length) return null;
+  return candidates[Math.floor(rng() * candidates.length)] ?? candidates[0] ?? null;
+}
+
+function sumGoals(matches: SeasonMatchResult[], key: "scoreFor" | "scoreAgainst") {
+  return matches.reduce((sum, match) => sum + match[key], 0);
+}
+
+function weightedPick(values: number[], rng: () => number) {
+  return values[Math.floor(rng() * values.length)] ?? values[0] ?? 0;
+}
+
+function winTurningPoint(rng: () => number) {
+  return weightedText(["Early pressure turned into control", "Bench quality finished the game", "Set-piece edge changed the rhythm", "Second-half control decided it"], rng);
+}
+
+function drawTurningPoint(rng: () => number) {
+  return weightedText(["Late pressure was not enough", "Control did not become a winner", "Opponent survived the final spell", "Rotation made the rhythm uneven"], rng);
+}
+
+function lossTurningPoint(rng: () => number) {
+  return weightedText(["Transition defence cracked", "Missed chances became expensive", "A tired spell decided it", "Opponent punished the open structure"], rng);
+}
+
+function weightedText(values: string[], rng: () => number) {
+  return values[Math.floor(rng() * values.length)] ?? values[0] ?? "Match swung on details";
+}
+
 function toState(profile: LeagueTeamProfile): LeagueTeamState {
   return {
     ...profile,
@@ -909,6 +1122,42 @@ function simulateKnockoutTie(
     score,
     extraTime,
     penalties,
+  };
+}
+
+function buildKnockoutMatchResult(input: {
+  competition: SeasonMatchResult["competition"];
+  round: string;
+  opponent: string;
+  home: boolean;
+  score: string;
+  won: boolean;
+  extraTime: boolean;
+  penalties: boolean;
+  basePower: number;
+  opponentPower: number;
+  lowerLeague: boolean;
+  eliteOpponent?: boolean;
+}): SeasonMatchResult {
+  const scoreMatch = input.score.match(/^(\d+)-(\d+)/);
+  const scoreFor = scoreMatch ? Number(scoreMatch[1]) : input.won ? 2 : 1;
+  const scoreAgainst = scoreMatch ? Number(scoreMatch[2]) : input.won ? 1 : 2;
+  const powerEdge = (input.basePower - input.opponentPower) / 12;
+  const xgFor = clamp(scoreFor + 0.35 + Math.max(0, powerEdge) * 0.18 + (input.lowerLeague ? 0.2 : 0), 0.4, 4.5);
+  const xgAgainst = clamp(scoreAgainst + 0.28 + Math.max(0, -powerEdge) * 0.14 + (input.eliteOpponent ? 0.12 : 0), 0.3, 4.0);
+  return {
+    matchId: `${input.competition}-${input.round}-${input.opponent}`.replace(/\s+/g, "-").toLowerCase(),
+    competition: input.competition,
+    round: input.round,
+    opponent: input.opponent,
+    home: input.home,
+    scoreFor,
+    scoreAgainst,
+    extraTime: input.extraTime,
+    penalties: input.penalties,
+    xgFor: Number(xgFor.toFixed(2)),
+    xgAgainst: Number(xgAgainst.toFixed(2)),
+    turningPoint: input.won ? "Bayern controlled the tie" : "Bayern lost the knockout swing",
   };
 }
 

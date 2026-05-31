@@ -49,7 +49,7 @@ export function TaskCard({
           </div>
           {onClick ? (
             <Button variant={status === "Complete" ? "secondary" : "default"} size="sm" className="w-full" onClick={onClick}>
-              Open Task
+              Open brief
             </Button>
           ) : null}
         </div>

@@ -2,6 +2,7 @@ import type { SimulationSummary } from "../types";
 import { clamp, ordinal } from "../utils";
 import { normalizeTactics, tacticalImpact } from "../simulation/tactics";
 import { analyzeBayernLineup } from "./lineupImpact";
+import { deriveRosterEntryProfile } from "./playerModel";
 
 export function projectedPoints(summary: SimulationSummary, inputs: {
   squadBalance: number;
@@ -26,10 +27,21 @@ export function projectedPoints(summary: SimulationSummary, inputs: {
     : 1.9;
 
   const formBaseScore = recentForm * 10;
+  const activeStrength = rosterStrength(summary.activeRoster);
+  const baselineStrength = rosterStrength(summary.baselineRoster ?? []);
+  const rosterSwing = activeStrength - baselineStrength;
   const transferImpactScore =
-    summary.signings.reduce((sum, signing) => sum + signing.tactical_fit_score * 0.14, 0) -
-    summary.soldPlayerIds.length * 1.7 -
-    summary.loanedPlayerIds.length * 1.1;
+    summary.signings.reduce((sum, signing) => {
+      const approval = signing.raw_json && typeof signing.raw_json === "object" ? ((signing.raw_json as { approval?: { stage?: string; total?: number } }).approval ?? null) : null;
+      const stageBoost = approval?.stage === "greenlight" ? 2.8 : approval?.stage === "negotiation" ? 1.1 : approval?.stage === "board_review" ? -1 : -3;
+      const needBoost = signing.squad_need_score * 0.12;
+      const fitBoost = signing.tactical_fit_score * 0.1;
+      const feeDrag = signing.fee_eur >= 80 ? -2.2 : signing.fee_eur >= 55 ? -1 : 0;
+      return sum + needBoost + fitBoost + stageBoost + feeDrag;
+    }, 0) +
+    Math.max(-8, rosterSwing * 0.42) -
+    summary.soldPlayerIds.length * 1.1 -
+    summary.loanedPlayerIds.length * 0.8;
 
   const uncertaintyPenalty = Math.max(0, 20 - summary.simulation.data_confidence * 0.18);
   const depthRiskPenalty = inputs.injuryVulnerability * 0.18;
@@ -56,7 +68,7 @@ export function projectedPoints(summary: SimulationSummary, inputs: {
     tactics.fatigue * 0.05 +
     tactics.chemistry * 0.04;
 
-  return clamp(Math.round(rawPoints + 42), 55, 91);
+  return clamp(Math.round(rawPoints + 40), 44, 92);
 }
 
 export function projectedFinish(points: number) {
@@ -77,4 +89,15 @@ export function verdictFromProjection(points: number, boardConfidence: number, r
   if (risk >= 75) return "Squad Crisis";
   if (boardConfidence < 45) return "Board Concern";
   return "Unstable but Dangerous";
+}
+
+function rosterStrength(roster: SimulationSummary["activeRoster"]) {
+  if (!roster.length) return 0;
+  const profiles = roster.map((entry) => deriveRosterEntryProfile(entry));
+  const topGroup = profiles
+    .map((profile) => profile.rating * 0.66 + profile.form * 0.34)
+    .sort((a, b) => b - a)
+    .slice(0, Math.min(11, profiles.length));
+  if (!topGroup.length) return 0;
+  return topGroup.reduce((sum, value) => sum + value, 0) / topGroup.length;
 }

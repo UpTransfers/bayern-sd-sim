@@ -16,7 +16,7 @@ import type {
   Store,
   SyncRun,
 } from "./types";
-import { fallbackBayernClub, fallbackBayernPlayers } from "./data/fallback";
+import { fallbackBayernClub, fallbackBayernPlayers, shouldUseCuratedFallback } from "./data/fallback";
 import { defaultTactics, normalizeTactics } from "./simulation/tactics";
 
 const storePath = path.join(process.cwd(), "data", "sim-store.json");
@@ -87,6 +87,12 @@ function emptyStore(): Store {
 }
 
 export function ensureFallbackBayernData(store: Store) {
+  if (!shouldUseCuratedFallback(store)) {
+    store.clubs = store.clubs.filter((club) => !(club.external_source === "manual" && club.external_id === fallbackBayernClub.external_id));
+    store.players = store.players.filter((player) => !(player.external_source === "manual" && player.external_id.startsWith("manual-")));
+    return;
+  }
+
   const hasBayernClub = store.clubs.some((club) => /bayern/i.test(club.name));
   if (!hasBayernClub) {
     store.clubs.push(fallbackBayernClub);

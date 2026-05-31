@@ -69,7 +69,7 @@ export function HeroStart({ dataMode }: { dataMode: string }) {
                     FC Bayern Sporting Director Simulator
                   </h1>
                   <p className="max-w-2xl text-base leading-7 text-slate-700">
-                    Build a Bayern squad plan, tune the budget, make transparent transfer decisions, and simulate the season.
+                    Build a Bayern squad plan, set the budget, open transfer talks, and take the season into your own hands.
                   </p>
                 </div>
 
@@ -124,7 +124,7 @@ export function HeroStart({ dataMode }: { dataMode: string }) {
                   </div>
 
                   <Button size="lg" onClick={startSimulation} disabled={!canSubmit || loading} className="w-full sm:w-auto">
-                    {loading ? "Starting..." : "Begin as Sporting Director"}
+                    {loading ? "Opening the boardroom..." : "Enter the boardroom"}
                     {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
                   </Button>
                 </div>
@@ -146,10 +146,10 @@ export function HeroStart({ dataMode }: { dataMode: string }) {
                 </div>
 
                 <InfoCard icon={<LineChart className="h-4 w-4" />} title="Weighted realism">
-                  Bayern-specific transfer logic, wage caution, and tactical fit influence the outcome.
+                  Bayern-specific transfer logic, wage caution, and tactical fit shape the run.
                 </InfoCard>
                 <InfoCard icon={<BadgeCheck className="h-4 w-4" />} title="Season report">
-                  A full Bundesliga table, Pokal and Champions League outcome, plus player awards.
+                  A full league table, Pokal and Champions League path, plus player awards.
                 </InfoCard>
                 <InfoCard icon={<ShieldCheck className="h-4 w-4" />} title="Transparent estimates">
                   Free data and editable assumptions keep the model clear, not opaque.

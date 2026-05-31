@@ -1,0 +1,7 @@
+Set-Location : Es wurde kein Positionsparameter gefunden, der das Argument "sporting" akzeptiert.
+In Zeile:1 Zeichen:1
++ Set-Location C:\Users\Admin\Documents\Bayern sporting director\bayern ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Set-Location], ParameterBindingException
+    + FullyQualifiedErrorId : PositionalParameterNotFound,Microsoft.PowerShell.Commands.SetLocationCommand
+ 

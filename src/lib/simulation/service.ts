@@ -2,6 +2,7 @@ import type {
   ClubRecord,
   DecisionFeedItem,
   PlayerRecord,
+  SeasonMatchResult,
   SimulationPlayerDecision,
   SimulationResult,
   SimulationRosterEntry,
@@ -28,8 +29,11 @@ import { pokalModel, uclTitleModel } from "../data/bayern2026";
 import { deriveRosterEntryProfile, deriveTransferCandidateProfile } from "../football/playerModel";
 import { analyzeBayernLineup, slotFitScore } from "../football/lineupImpact";
 import { buildBayernSetPiecePlan } from "../football/setPieces";
+import { inferPlayerImportance } from "../football/negotiation";
+import { buildSeasonStats } from "../football/seasonStats";
 import { formationSlots } from "./formations";
 import { simulateBundesligaSeason, simulatePokalOutcome, simulateUclOutcome } from "./league";
+import { previewLoanImpact, previewSaleImpact, previewSigningImpact } from "../football/decisionImpact";
 
 export function currentSeasonStartYear(date = new Date()) {
   const year = date.getFullYear();
@@ -262,6 +266,7 @@ export async function buildSimulationSummary(simulationId: string): Promise<Simu
   const result = getLatestResult(store, simulationId);
   const latestDecision = latestDecisionMap(decisions);
   const sourcePlayers = club ? getBayernPlayers(store, club.id) : store.players.filter((player) => /bayern/i.test(player.name));
+  const baselineRoster = buildRosterEntries(sourcePlayers, [], [], { includeSignings: false });
   const promotedPlayers = store.players.filter((player) => {
     if (player.bayern_category !== "loan_return" && player.bayern_category !== "youth") return false;
     const decision = latestDecision.get(player.id)?.decision_type;
@@ -300,6 +305,7 @@ export async function buildSimulationSummary(simulationId: string): Promise<Simu
     currentStanding: standing,
     recentMatches,
     sourceHealth: store.data_sources,
+    baselineRoster,
     activeRoster,
     sellRoster,
     loanReturnPool,
@@ -463,6 +469,461 @@ function buildSeasonVerdict(args: {
     return "Still a good season by most standards, but Bayern's own benchmark made it feel too open and too expensive.";
   }
   return `Below Bayern standards. The model points to ${args.derived.injuryRisk >= 60 ? "injury pressure" : "tactical disruption"}, ${args.derived.mediaPressure >= 60 ? "outside noise" : "inconsistent rhythm"}, and a team that never fully locked in.`;
+}
+
+type StoryCandidate = {
+  label: string;
+  summary: string;
+  score: number;
+  reasons: string[];
+};
+
+function buildSeasonStory(args: {
+  summary: SimulationSummary;
+  leaguePlace: number;
+  leaguePoints: number;
+  league: { bayernRow: { gf: number; ga: number }; table: Array<{ pos: number; club: string; gf: number; ga: number; pts: number }> };
+  pokalOutcome: { round: string; score: string; winner: string; opponent?: string | null; matchResults?: SeasonMatchResult[] };
+  uclOutcome: { round: string; score: string; winner: string; opponent?: string | null; matchResults?: SeasonMatchResult[]; leaguePhasePoints?: number; leaguePhaseRank?: number };
+  board: number;
+  fan: number;
+  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; mediaPressure: number };
+  lineupImpact: { startingQuality: number; benchQuality: number; depth: number; rotation: number; outOfPositionCount: number };
+  tacticalImpact: { control: number; threat: number; chemistry: number; fatigue: number; risk: number };
+  seasonVerdict: string;
+  transferVerdict: string;
+  trophies: string[];
+  matchResults: SeasonMatchResult[];
+}) {
+  const decisionCandidates: StoryCandidate[] = [];
+  const rosterLookup = new Map<string, SimulationRosterEntry>();
+  for (const entry of [...args.summary.activeRoster, ...args.summary.sellRoster]) {
+    const key = entry.kind === "catalog" ? entry.player.id : entry.player.id;
+    if (!rosterLookup.has(key)) rosterLookup.set(key, entry);
+  }
+
+  for (const decision of args.summary.decisions) {
+    const rosterEntry = rosterLookup.get(decision.player_id) ?? null;
+    const player = rosterEntry?.player ?? null;
+    const importance = inferPlayerImportance({
+      playerImportance: player && "player_importance" in player ? (player.player_importance ?? null) : null,
+      bayernCategory: player && "bayern_category" in player ? (player.bayern_category ?? null) : null,
+      age: player?.age ?? null,
+      transferValueMinEurM: player && "transfer_value_min_eur_m" in player ? (player.transfer_value_min_eur_m ?? null) : null,
+      transferValueMaxEurM: player && "transfer_value_max_eur_m" in player ? (player.transfer_value_max_eur_m ?? null) : null,
+      need: player && "data_confidence" in player ? (player.data_confidence ?? null) : null,
+      position: player?.position ?? null,
+      rating: player && "rating" in player ? (player.rating ?? null) : null,
+    });
+    const wageTier = resolveWageTier(player && "wage_tier" in player ? (player.wage_tier ?? null) : null, importance);
+    const squadDepthBefore = countRosterDepth(args.summary.activeRoster, player?.position ?? null);
+    const replacementQuality = player && "data_confidence" in player ? player.data_confidence : decision.confidence_score;
+    const tacticalImportance = player && "data_confidence" in player ? Math.max(55, player.data_confidence) : decision.confidence_score;
+    const youthPathwayValue = player && "academy_pathway_value" in player ? (player.academy_pathway_value ?? 0) : 0;
+    let impact:
+      | ReturnType<typeof previewSaleImpact>
+      | ReturnType<typeof previewLoanImpact>
+      | {
+          budgetDelta: number;
+          wageDelta: number;
+          squadDepthDelta: number;
+          boardConfidenceDelta: number;
+          fanConfidenceDelta: number;
+          mediaPressureDelta: number;
+          tacticalFitDelta: number;
+          youthPathwayDelta: number;
+          replacementRisk: number;
+          severity: "positive" | "neutral" | "warning" | "danger";
+          reasons: string[];
+        };
+
+    if (decision.decision_type === "sell") {
+      impact = previewSaleImpact({
+        playerId: decision.player_id,
+        playerName: rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player",
+        playerImportance: importance,
+        wageTier,
+        boardSaleStance: player && "board_sale_stance" in player ? (player.board_sale_stance ?? null) : null,
+        transferFeeEurM: decision.fee_eur ?? Math.max(10, replacementQuality / 2),
+        replacementQuality,
+        squadDepthBefore,
+        tacticalImportance,
+        youthPathwayValue,
+      });
+    } else if (decision.decision_type === "loan") {
+      impact = previewLoanImpact({
+        playerId: decision.player_id,
+      playerName: rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player",
+      playerImportance: importance,
+      wageTier,
+      age: player?.age ?? 24,
+      pathwayValue: youthPathwayValue,
+      wageCoveragePercent: decision.replacement_warning ? 25 : 40,
+      minutesPromise:
+        importance === "development" ||
+        importance === "loan_candidate" ||
+        (player && "minutes_expectation" in player ? (player.minutes_expectation ?? null) : null) === "prospect",
+      squadDepthBefore,
+      tacticalImportance,
+    });
+    } else if (decision.decision_type === "development") {
+      impact = {
+        budgetDelta: 0,
+        wageDelta: 0.2,
+        squadDepthDelta: importance === "development" ? -0.2 : -0.6,
+        boardConfidenceDelta: importance === "development" ? 1.6 : -0.8,
+        fanConfidenceDelta: importance === "development" ? 1.9 : -0.5,
+        mediaPressureDelta: importance === "development" ? -0.4 : 0.3,
+        tacticalFitDelta: importance === "development" ? 0.8 : -0.2,
+        youthPathwayDelta: importance === "development" ? 2.2 : 0.5,
+        replacementRisk: importance === "development" ? 10 : 28,
+        severity: importance === "development" ? "positive" : "neutral",
+        reasons:
+          importance === "development"
+            ? ["The player can develop without blocking the first team.", "The pathway stays open for later decisions."]
+            : ["Development duty is fine, but the player is not an obvious academy-only case.", "The short-term depth hit is small but real."],
+      };
+    } else {
+      impact = {
+        budgetDelta: 0,
+        wageDelta: 0,
+        squadDepthDelta: importance === "core" ? 0.9 : importance === "starter" ? 0.6 : 0.2,
+        boardConfidenceDelta: importance === "core" ? 2.5 : importance === "starter" ? 1.4 : 0.4,
+        fanConfidenceDelta: importance === "core" ? 2.2 : importance === "starter" ? 1.1 : 0.4,
+        mediaPressureDelta: importance === "core" ? -0.3 : -0.1,
+        tacticalFitDelta: importance === "core" ? 1.2 : importance === "starter" ? 0.7 : 0.3,
+        youthPathwayDelta: importance === "development" ? 1.2 : 0.2,
+        replacementRisk: importance === "core" ? 12 : importance === "starter" ? 18 : 24,
+        severity: importance === "core" ? "positive" : "neutral",
+        reasons:
+          importance === "core"
+            ? ["Keeping a core player protects the spine of the XI.", "The squad benefits from stability rather than churn."]
+            : ["Retaining the player is sensible and keeps the squad balanced.", "There is no major downside to keeping the role intact."],
+      };
+    }
+
+    const score =
+      impact.boardConfidenceDelta +
+      impact.fanConfidenceDelta +
+      impact.tacticalFitDelta * 0.35 +
+      impact.youthPathwayDelta * 0.2 +
+      impact.squadDepthDelta * 1.1 +
+      impact.budgetDelta * 0.04 +
+      impact.wageDelta * 0.7 -
+      impact.mediaPressureDelta * 0.45 -
+      impact.replacementRisk * 0.08;
+
+    const label =
+      decision.decision_type === "sell"
+        ? `Selling ${rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player"}`
+        : decision.decision_type === "loan"
+        ? `Loaning ${rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player"}`
+        : decision.decision_type === "development"
+        ? `Development role for ${rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player"}`
+        : `Keeping ${rosterEntry?.kind === "catalog" ? rosterEntry.player.name : player?.name ?? "Player"}`;
+
+    decisionCandidates.push({
+      label,
+      score,
+      summary: impact.reasons.slice(0, 2).join(" "),
+      reasons: impact.reasons.slice(0, 5),
+    });
+  }
+
+  for (const signing of args.summary.signings) {
+    const raw = (signing.raw_json && typeof signing.raw_json === "object" ? (signing.raw_json as Record<string, unknown>) : {}) ?? {};
+    const approval = (raw.approval && typeof raw.approval === "object" ? (raw.approval as Record<string, unknown>) : {}) ?? {};
+    const rawNeed = typeof (raw as { need?: unknown }).need === "number" ? Number((raw as { need?: number }).need) : signing.squad_need_score;
+    const rawAbility = typeof (raw as { ability?: unknown }).ability === "number" ? Number((raw as { ability?: number }).ability) : Math.round(signing.tactical_fit_score / 10);
+    const rawFit = typeof (raw as { bayernFit?: unknown }).bayernFit === "number" ? Number((raw as { bayernFit?: number }).bayernFit) * 10 : signing.tactical_fit_score;
+    const rawAge = typeof (raw as { age?: unknown }).age === "number" ? Number((raw as { age?: number }).age) : 25;
+    const rawContract = typeof (raw as { contract?: unknown }).contract === "string" ? String((raw as { contract?: string }).contract) : "uncertain";
+    const rawWageDemand = parseMillionsFromText(typeof (raw as { bayernDemand?: unknown }).bayernDemand === "string" ? String((raw as { bayernDemand?: string }).bayernDemand) : null) ?? signing.fee_eur * 0.04;
+    const rawCurrentWage = parseMillionsFromText(typeof (raw as { currentWage?: unknown }).currentWage === "string" ? String((raw as { currentWage?: string }).currentWage) : null);
+    const wageConcern = typeof (raw as { wageConcern?: unknown }).wageConcern === "string" ? String((raw as { wageConcern?: string }).wageConcern) : null;
+    const approvalTotal = typeof (approval as { total?: unknown }).total === "number" ? Number((approval as { total?: number }).total) : signing.tactical_fit_score;
+    const approvalDecision = String((approval as { decision?: unknown }).decision ?? "The board approved the move.");
+    const importance = inferPlayerImportance({
+      age: rawAge,
+      need: rawNeed,
+      rating: rawAbility * 10,
+      position: signing.position,
+      feeEurM: signing.fee_eur,
+    });
+    const impact = previewSigningImpact({
+      playerId: signing.player_external_id,
+      playerName: signing.player_name,
+      feeEurM: signing.fee_eur,
+      wageDemandTier: mapWageConcernToTier(wageConcern) ?? resolveWageTier(null, importance),
+      targetImportance: importance,
+      tacticalFit: rawFit,
+      squadNeed: signing.squad_need_score,
+      injuryRisk: Math.max(15, 35 - (signing.tactical_fit_score - signing.squad_need_score) * 0.12),
+      contractYears: parseContractYears(rawContract),
+      blocksYouthPathway: signing.squad_need_score >= 72,
+      replacementQuality: signing.seller_resistance ?? signing.squad_need_score,
+      sellerResistance: signing.seller_resistance ?? approvalTotal,
+    });
+    const feePressure = signing.fee_eur / 12;
+    const wagePressure = rawCurrentWage && rawWageDemand ? Math.max(0, rawWageDemand - rawCurrentWage) * 5 : 0;
+    const score =
+      impact.boardConfidenceDelta +
+      impact.fanConfidenceDelta +
+      impact.tacticalFitDelta * 0.35 +
+      impact.youthPathwayDelta * 0.15 +
+      approvalTotal * 0.12 -
+      impact.mediaPressureDelta * 0.35 -
+      impact.replacementRisk * 0.08 -
+      feePressure * 0.2 -
+      wagePressure * 0.9;
+
+    decisionCandidates.push({
+      label: `Signing ${signing.player_name}`,
+      score,
+      summary: `${approvalDecision} ${impact.reasons.slice(0, 2).join(" ")}`.trim(),
+      reasons: [...impact.reasons.slice(0, 3), signing.replacement_warning ?? null, wageConcern ? `Wage concern: ${wageConcern}.` : null]
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 5),
+    });
+  }
+
+  const sortedCandidates = [...decisionCandidates].sort((a, b) => b.score - a.score);
+  const bestCandidate = sortedCandidates[0] ?? null;
+  const worstCandidate = sortedCandidates.length > 1 ? sortedCandidates[sortedCandidates.length - 1] ?? null : null;
+
+  const boardVerdict =
+    args.board >= 80
+      ? "Board confidence is strong and the plan looks controlled."
+      : args.board >= 65
+        ? "The board accepts the direction, but still wants cleaner value."
+        : args.board >= 50
+          ? "The board sees the logic, but the costs or timing are awkward."
+          : "The board is not comfortable with how the season was managed.";
+
+  const fanVerdict =
+    args.fan >= 80
+      ? "Fans are clearly onside with the direction."
+      : args.fan >= 65
+        ? "The fanbase is mixed, but the season still feels coherent."
+        : args.fan >= 50
+          ? "Fans are divided and want more obvious ambition."
+          : "Supporters are frustrated and the mood is sharp.";
+
+  const transferGrade = gradeTransferWindow(args.board, args.fan, args.trophies.length, args.transferVerdict, args.leaguePlace);
+  const keyTurningPoint = determineKeyTurningPoint(args.matchResults, args.pokalOutcome, args.uclOutcome, args.leaguePlace);
+  const mediaHeadline = buildMediaHeadline(args, bestCandidate, worstCandidate);
+  const whyThisHappened = buildWhyThisHappened({
+    seasonVerdict: args.seasonVerdict,
+    bestDecision: bestCandidate?.label ?? "No clear decision",
+    worstDecision: worstCandidate?.label ?? "No clear downside",
+    boardVerdict,
+    fanVerdict,
+    leaguePoints: args.leaguePoints,
+    leagueRow: args.league.bayernRow,
+    derived: args.derived,
+    lineupImpact: args.lineupImpact,
+    tacticalImpact: args.tacticalImpact,
+    keyTurningPoint,
+  });
+
+  return {
+    bestDecision: bestCandidate ? `${bestCandidate.label} - ${bestCandidate.summary}` : null,
+    worstDecision: worstCandidate ? `${worstCandidate.label} - ${worstCandidate.summary}` : null,
+    keyTurningPoint,
+    mediaHeadline,
+    transferGrade,
+    boardVerdict,
+    fanVerdict,
+    whyThisHappened,
+    matchResults: args.matchResults,
+  };
+}
+
+function resolveWageTier(value: unknown, importance: ReturnType<typeof inferPlayerImportance>): "low" | "mid" | "high" | "elite" | "superstar" {
+  if (value === "low" || value === "mid" || value === "high" || value === "elite" || value === "superstar") {
+    return value;
+  }
+  if (importance === "core") return "superstar";
+  if (importance === "starter") return "elite";
+  if (importance === "rotation") return "high";
+  if (importance === "development") return "mid";
+  return "low";
+}
+
+function mapWageConcernToTier(value: unknown): "low" | "mid" | "high" | "elite" | "superstar" | null {
+  if (value === "Low") return "low";
+  if (value === "Medium") return "mid";
+  if (value === "High") return "high";
+  if (value === "Very High") return "superstar";
+  return null;
+}
+
+function countRosterDepth(roster: SimulationRosterEntry[], position: string | null) {
+  const bucket = (position ?? "").toUpperCase();
+  return roster.filter((entry) => {
+    const candidatePosition = entry.kind === "catalog" ? entry.player.position : entry.player.position;
+    const pos = (candidatePosition ?? "").toUpperCase();
+    if (!bucket) return true;
+    if (bucket.includes("GK")) return pos.includes("GK");
+    if (bucket.includes("CB")) return pos.includes("CB") || pos.includes("DEF");
+    if (bucket.includes("LB")) return pos.includes("LB") || pos.includes("LWB") || pos.includes("CB");
+    if (bucket.includes("RB")) return pos.includes("RB") || pos.includes("RWB") || pos.includes("CB");
+    if (bucket.includes("DM")) return pos.includes("DM") || pos.includes("CM");
+    if (bucket.includes("CM")) return pos.includes("CM") || pos.includes("DM") || pos.includes("AM");
+    if (bucket.includes("AM")) return pos.includes("AM") || pos.includes("CAM");
+    if (bucket.includes("LW") || bucket.includes("RW")) return pos.includes("W") || pos.includes("FWD") || pos.includes("AM");
+    if (bucket.includes("ST")) return pos.includes("ST") || pos.includes("FWD");
+    return pos === bucket;
+  }).length;
+}
+
+function parseMillionsFromText(value: string | null | undefined) {
+  if (!value) return null;
+  const cleaned = value.replace(/\*\*/g, "").replace(/,/g, "").trim();
+  const euroYear = cleaned.match(/€\s*([\d.]+)\s*m\/y/i);
+  if (euroYear) return Number(euroYear[1]);
+  const poundYear = cleaned.match(/£\s*([\d.]+)\s*m\/y/i);
+  if (poundYear) return Number(poundYear[1]) * 1.17;
+  const euroWeek = cleaned.match(/€\s*([\d.]+)\s*k\s*p\/w/i);
+  if (euroWeek) return Number(euroWeek[1]) * 0.052;
+  const poundWeek = cleaned.match(/£\s*([\d.]+)\s*k\s*p\/w/i);
+  if (poundWeek) return Number(poundWeek[1]) * 0.052 * 1.17;
+  return null;
+}
+
+function parseContractYears(contract: string) {
+  const match = contract.match(/20(2[6-9]|3[0-5])/);
+  if (!match) return 3;
+  const year = Number(match[0].slice(-2));
+  return clamp(year - 26, 1, 5);
+}
+
+function gradeTransferWindow(board: number, fan: number, trophies: number, transferVerdict: string, place: number) {
+  const positiveAnchor = board >= 80 && fan >= 75 && (trophies > 0 || place === 1);
+  const strong = board >= 72 && fan >= 68;
+  const decent = board >= 62 && fan >= 58;
+  if (positiveAnchor) return "A+";
+  if (strong && /smart|coherent|good/i.test(transferVerdict)) return "A";
+  if (strong) return "A-";
+  if (decent) return "B";
+  if (board >= 50) return "C";
+  if (board >= 40) return "D";
+  return "F";
+}
+
+function determineKeyTurningPoint(
+  matchResults: SeasonMatchResult[],
+  pokalOutcome: { round: string; score: string; winner: string; opponent?: string | null },
+  uclOutcome: { round: string; score: string; winner: string; opponent?: string | null },
+  leaguePlace: number,
+) {
+  if (pokalOutcome.winner !== "Bayern Munich" && pokalOutcome.round !== "Won") {
+    return `The Pokal exit against ${pokalOutcome.opponent ?? pokalOutcome.winner} in the ${pokalOutcome.round.toLowerCase()} (${pokalOutcome.score}) changed the tone.`;
+  }
+  if (uclOutcome.winner !== "Bayern Munich" && uclOutcome.round !== "Won") {
+    return `The Champions League exit against ${uclOutcome.opponent ?? uclOutcome.winner} in the ${uclOutcome.round.toLowerCase()} (${uclOutcome.score}) changed the tone.`;
+  }
+  const leagueMatches = matchResults.filter((item) => item.competition === "bundesliga");
+  const biggestWin = [...leagueMatches].sort((a, b) => b.scoreFor - b.scoreAgainst - (a.scoreFor - a.scoreAgainst) || b.scoreFor - a.scoreFor)[0];
+  const biggestLoss = [...leagueMatches].sort((a, b) => b.scoreAgainst - b.scoreFor - (a.scoreAgainst - a.scoreFor) || b.scoreAgainst - a.scoreAgainst)[0];
+  if (leaguePlace === 1 && biggestWin && biggestWin.scoreFor - biggestWin.scoreAgainst >= 2) {
+    return `The ${biggestWin.round} win over ${biggestWin.opponent} (${biggestWin.scoreFor}-${biggestWin.scoreAgainst}) set the title rhythm.`;
+  }
+  if (biggestLoss && biggestLoss.scoreAgainst > biggestLoss.scoreFor) {
+    return `The ${biggestLoss.round} loss to ${biggestLoss.opponent} (${biggestLoss.scoreFor}-${biggestLoss.scoreAgainst}) was the most expensive swing.`;
+  }
+  if (biggestWin) {
+    return `The ${biggestWin.round} win over ${biggestWin.opponent} (${biggestWin.scoreFor}-${biggestWin.scoreAgainst}) was the cleanest control point.`;
+  }
+  return "No single turning point stood above the rest.";
+}
+
+function buildMediaHeadline(
+  args: {
+    leaguePlace: number;
+    leaguePoints: number;
+    trophies: string[];
+    seasonVerdict: string;
+    transferVerdict: string;
+    board: number;
+    fan: number;
+    derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; mediaPressure: number };
+  },
+  bestCandidate: StoryCandidate | null,
+  worstCandidate: StoryCandidate | null,
+) {
+  if (args.leaguePlace === 1 && args.trophies.length >= 2) {
+    return "Bayern's control and depth held the season together.";
+  }
+  if (args.leaguePlace === 1) {
+    return "Bayern stayed on script at home, but the cup margins carried the story.";
+  }
+  if (args.leaguePlace <= 2) {
+    return `A strong Bayern side still left one or two questions hanging after ${args.leaguePoints} points, board ${args.board}/100, and fan ${args.fan}/100.`;
+  }
+  if (args.derived.mediaPressure >= 60) {
+    return "Pressure builds as the season drifts away from Bayern's standard.";
+  }
+  return bestCandidate || worstCandidate
+    ? `The window told the story: ${bestCandidate?.label ?? "one smart move"}${worstCandidate ? ` and ${worstCandidate.label ?? "one costly call"}` : " with no obvious miss standing out"}.`
+    : `Bayern produced a solid season, but not enough to quiet the debate after ${args.leaguePoints} points and a ${args.seasonVerdict.toLowerCase()} with a ${args.transferVerdict.toLowerCase()} window.`;
+}
+
+function buildWhyThisHappened(args: {
+  seasonVerdict: string;
+  bestDecision: string;
+  worstDecision: string;
+  boardVerdict: string;
+  fanVerdict: string;
+  leaguePoints: number;
+  leagueRow: { gf: number; ga: number };
+  derived: { tactical: number; injuryRisk: number; squadBalance: number; budgetEfficiency: number; mediaPressure: number };
+  lineupImpact: { startingQuality: number; benchQuality: number; depth: number; rotation: number; outOfPositionCount: number };
+  tacticalImpact: { control: number; threat: number; chemistry: number; fatigue: number; risk: number };
+  keyTurningPoint: string;
+}) {
+  const tacticalLine =
+    args.lineupImpact.outOfPositionCount > 0
+      ? `${args.lineupImpact.outOfPositionCount} role mismatch${args.lineupImpact.outOfPositionCount === 1 ? "" : "es"} reduced tactical fit.`
+      : "The starting XI stayed mostly on natural roles, so the tactical base stayed stable.";
+  const tacticalShape =
+    args.tacticalImpact.control >= 72
+      ? "Control and pressing kept most matches in Bayern's rhythm."
+      : args.tacticalImpact.threat >= 70
+        ? "Chance creation stayed strong, but control was a little looser."
+        : "The tactical control was useful, but not strong enough to dominate every game.";
+  const squadShape =
+    args.lineupImpact.startingQuality >= 78
+      ? "The starting XI had a strong enough baseline to keep Bayern competitive in most spells."
+      : "The starting XI was good, but not always dominant enough to close games early.";
+  const benchShape =
+    args.lineupImpact.benchQuality >= 72
+      ? "The bench helped the team absorb rotation without too much drop-off."
+      : "The bench did not always protect the level when rotation hit.";
+  const depthShape =
+    args.lineupImpact.depth >= 72
+      ? "Squad depth was useful when the schedule tightened."
+      : "Squad depth was only average, so the schedule still had bite.";
+  const rotationShape =
+    args.lineupImpact.rotation >= 60
+      ? "Rotation load stayed noticeable, which kept the season from feeling simple."
+      : "Rotation load was manageable for most of the run.";
+  const strengthLine =
+    args.derived.squadBalance >= 72
+      ? "The squad had enough structure to handle pressure."
+      : "The squad structure was good enough, but not dominant.";
+  const riskLine =
+    args.derived.injuryRisk >= 60
+      ? "Injury pressure kept the ceiling from feeling truly clean."
+      : "Injury pressure stayed manageable for most of the run.";
+  return [
+    args.seasonVerdict,
+    `${tacticalLine} ${tacticalShape} ${squadShape} ${benchShape} ${depthShape} ${rotationShape} ${strengthLine} ${riskLine}`,
+    `Best decision: ${args.bestDecision}. Worst decision: ${args.worstDecision}.`,
+    `Board view: ${args.boardVerdict} Fan view: ${args.fanVerdict}.`,
+    `Key turning point: ${args.keyTurningPoint}.`,
+    `The final shape was a product of ${args.leaguePoints} points, ${args.leagueRow.gf} goals scored, and ${args.leagueRow.ga} goals conceded.`,
+  ].join(" ");
 }
 
 export function recalculateDerivedScores(summary: SimulationSummary) {
@@ -825,7 +1286,7 @@ export async function commitSimulationResult(simulationId: string) {
         null as null | { name: string; penalty: number },
       )
     : null;
-  const disappointment = transferDisappointment?.name ?? disappointmentBase?.name ?? null;
+  const disappointment = summary.signings.length > 1 ? transferDisappointment?.name ?? disappointmentBase?.name ?? null : disappointmentBase?.name ?? null;
   const topScorerStats = topScorer
     ? {
         name: topScorer.name,
@@ -897,6 +1358,49 @@ export async function commitSimulationResult(simulationId: string) {
     uclOutcome,
   });
 
+  const matchResults = [
+    ...(league.matchResults ?? []),
+    ...(pokalOutcome.matchResults ?? []),
+    ...(uclOutcome.matchResults ?? []),
+  ];
+  const seasonStory = buildSeasonStory({
+    summary,
+    leaguePlace: league.bayernPlace,
+    leaguePoints: finishPoints,
+    league,
+    pokalOutcome,
+    uclOutcome,
+    board,
+    fan,
+    derived,
+    lineupImpact: {
+      startingQuality: lineupImpact.startingQuality,
+      benchQuality: lineupImpact.benchQuality,
+      depth: lineupImpact.depth,
+      rotation: lineupImpact.rotation,
+      outOfPositionCount: lineupImpact.outOfPositionCount,
+    },
+    tacticalImpact: impact,
+    seasonVerdict,
+    transferVerdict,
+    trophies,
+    matchResults,
+  });
+  const seasonStats = buildSeasonStats({
+    summary,
+    matchResults,
+    derived,
+    lineupImpact: {
+      startingQuality: lineupImpact.startingQuality,
+      benchQuality: lineupImpact.benchQuality,
+      depth: lineupImpact.depth,
+      rotation: lineupImpact.rotation,
+      outOfPositionCount: lineupImpact.outOfPositionCount,
+    },
+    tacticalImpact: impact,
+    setPiecePlan,
+  });
+
   const narrative = [
     `Bayern finished ${finish} with ${finishPoints} points and a ${formatSignedGoalDiff(league.bayernRow.gf - league.bayernRow.ga)} goal difference.`,
     `Squad balance ${derived.squadBalance}/100, tactical fit ${derived.tactical}/100, budget efficiency ${derived.budgetEfficiency}/100.`,
@@ -905,10 +1409,13 @@ export async function commitSimulationResult(simulationId: string) {
     `Set pieces: captain ${setPiecePlan.captain.name}, penalties ${setPiecePlan.penaltyTaker.name}, free kicks ${setPiecePlan.freeKickTaker.name}, corners ${setPiecePlan.cornerTaker.name}.`,
     `Top scorer: ${topScorerLine}, top assister: ${topAssisterLine}, best player: ${bestPlayerLine}.`,
     `Lineup control ${lineupImpact.control}/100, threat ${lineupImpact.threat}/100, chemistry ${lineupImpact.chemistry}/100, out of position ${lineupImpact.outOfPositionCount}.`,
+    `Tactical summary: ${seasonStats.tacticalSummary}`,
+    `Availability: ${seasonStats.availabilitySummary}`,
     `Board confidence ${board}/100, fan confidence ${fan}/100.`,
     seasonVerdict,
   ].join(" ");
 
+  const resultMatchResults = matchResults;
   const result: SimulationResult = {
     id: stableId("result", simulationId, new Date().toISOString()),
     simulation_id: simulationId,
@@ -924,6 +1431,20 @@ export async function commitSimulationResult(simulationId: string) {
     risk_rating: derived.injuryRisk >= 75 ? "High" : derived.injuryRisk >= 50 ? "Moderate" : "Low",
     verdict,
     narrative,
+    best_decision: seasonStory.bestDecision,
+    worst_decision: seasonStory.worstDecision,
+    key_turning_point: seasonStory.keyTurningPoint,
+    media_headline: seasonStory.mediaHeadline,
+    transfer_grade: seasonStory.transferGrade,
+    board_verdict: seasonStory.boardVerdict,
+    fan_verdict: seasonStory.fanVerdict,
+    why_this_happened: seasonStory.whyThisHappened,
+    match_results: resultMatchResults,
+    team_stats: seasonStats.teamStats,
+    player_stats: seasonStats.playerStats,
+    injury_report: seasonStats.injuryReport,
+    tactical_summary: seasonStats.tacticalSummary,
+    availability_summary: seasonStats.availabilitySummary,
     methodology_json: {
       boardObjectives: boardObjectives({
         lastFinish: league.bayernPlace,
@@ -985,7 +1506,21 @@ export async function commitSimulationResult(simulationId: string) {
         disappointment,
         transferVerdict,
         verdictText: seasonVerdict,
+        boardVerdict: seasonStory.boardVerdict,
+        fanVerdict: seasonStory.fanVerdict,
+        whyThisHappened: seasonStory.whyThisHappened,
+        bestDecision: seasonStory.bestDecision,
+        worstDecision: seasonStory.worstDecision,
+        keyTurningPoint: seasonStory.keyTurningPoint,
+        mediaHeadline: seasonStory.mediaHeadline,
+        transferGrade: seasonStory.transferGrade,
+        matchResults: resultMatchResults,
         setPiecePlan,
+        teamStats: seasonStats.teamStats,
+        playerStats: seasonStats.playerStats,
+        injuryReport: seasonStats.injuryReport,
+        tacticalSummary: seasonStats.tacticalSummary,
+        availabilitySummary: seasonStats.availabilitySummary,
       },
       competitions: {
         pokal: pokalModel.bayern,

@@ -35,6 +35,10 @@ export type TransferCandidate = {
   characterNote: string;
   realism: string;
   verdict: string;
+  need?: number;
+  currentWage?: string;
+  bayernDemand?: string;
+  wageConcern?: "Low" | "Medium" | "High" | "Very High";
 };
 
 export type CompetitionTeamModel = {
@@ -95,16 +99,14 @@ export const bayernSquad2026: BayernSquadItem[] = [
 ];
 
 export const bayernLoanReturns: BayernSquadItem[] = [
-  { id: "alexander-nubel", name: "Alexander Nubel", shirtNumber: 1, age: 29, position: "GK", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 10, max: 15 }, notes: "Stuttgart loan return, sale possible." },
+  { id: "alexander-nubel", name: "Alexander N�bel", shirtNumber: 1, age: 29, position: "GK", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 10, max: 15 }, notes: "Stuttgart loan return, sale possible." },
   { id: "daniel-peretz", name: "Daniel Peretz", shirtNumber: 18, age: 26, position: "GK", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 5, max: 8 }, notes: "Southampton loan return path unclear." },
-  { id: "joao-palhinha", name: "Joao Palhinha", shirtNumber: 16, age: 31, position: "DM", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 18, max: 25 }, notes: "Tottenham loan with option." },
+  { id: "joao-palhinha", name: "Jo�o Palhinha", shirtNumber: 16, age: 31, position: "DM", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 18, max: 25 }, notes: "Tottenham loan with option." },
   { id: "sacha-boey", name: "Sacha Boey", shirtNumber: 23, age: 25, position: "RB", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 10, max: 15 }, notes: "Galatasaray loan with reported option." },
   { id: "bryan-zaragoza", name: "Bryan Zaragoza", shirtNumber: null, age: 24, position: "LW/RW", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 10, max: 15 }, notes: "Roma loan with option to buy." },
   { id: "jonah-kusi-asare", name: "Jonah Kusi-Asare", shirtNumber: null, age: 19, position: "ST", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 8, max: 12 }, notes: "Fulham loan / return case." },
   { id: "arijon-ibrahimovic", name: "Arijon Ibrahimovic", shirtNumber: null, age: 20, position: "AM/W", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 6, max: 10 }, notes: "Heidenheim loan return." },
   { id: "maurice-krattenmacher", name: "Maurice Krattenmacher", shirtNumber: null, age: 21, position: "CM", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 4, max: 7 }, notes: "Hertha loan return." },
-  { id: "felipe-chavez", name: "Felipe Chavez", shirtNumber: null, age: 20, position: "CM/AM", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 2, max: 4 }, notes: "Köln loan return." },
-  { id: "javier-fernandez", name: "Javier Fernandez", shirtNumber: null, age: 20, position: "CM", category: "loan_return", contract: "Until 2028", transferValue: { min: 1, max: 3 }, notes: "Nürnberg loan return." },
   { id: "armindo-sieb", name: "Armindo Sieb", shirtNumber: null, age: 23, position: "ST", category: "loan_return", contract: "Bayern-owned", transferValue: { min: 3, max: 5 }, notes: "Mainz loan return." },
 ];
 
@@ -155,8 +157,6 @@ export const bayernSeasonSignals2025_26: Record<string, BayernSeasonSignal> = {
   "jonah-kusi-asare": { apps: 4, starts: 1, minutes: 4, note: "Very small sample, upside only." },
   "maycon-cardozo": { apps: 4, starts: 2, minutes: 33, note: "Youth winger sample." },
   "bastian-assomo": { apps: 1, starts: 0, minutes: 0, note: "Development only." },
-  "felipe-chavez": { apps: 6, starts: 2, minutes: 12, note: "Minimal senior sample." },
-  "javier-fernandez": { apps: 1, starts: 0, minutes: 0, note: "Minimal senior sample." },
   "noel-aseko-nkili": { apps: 27, starts: 20, minutes: 1700, goals: 3, assists: 5, note: "Confirmed return and pathway." },
   "david-santos-daiber": { apps: 10, starts: 2, minutes: 27, note: "Tiny senior sample, but talent flags." },
 };
@@ -273,6 +273,13 @@ export const bayernTransferCandidates: TransferCandidate[] = [
   { id: "ricardo-pepi", name: "Ricardo Pepi", club: "PSV Eindhoven", shirtNumber: 9, ageMin: 23, ageMax: 24, nationality: "USA", position: "ST", foot: "Right", fee: { min: 40, max: 50 }, contract: "30/06/2030", ability: 7.8, bayernFit: 7.9, keyTraits: ["box", "timing", "pressing"], inPossessionFit: "Finishes cutbacks", outOfPossessionFit: "Active first presser", characterNote: "uncertain", realism: "Difficult", verdict: "Good rotation nine, but PSV and PL interest inflate price." },
   { id: "christian-kofane", name: "Christian Kofane", club: "Bayer Leverkusen", shirtNumber: 35, ageMin: 20, ageMax: 21, nationality: "CMR", position: "ST", foot: "Right", fee: { min: 50, max: 70 }, contract: "30/06/2029", ability: 7.7, bayernFit: 8.2, keyTraits: ["power", "size", "explosiveness"], inPossessionFit: "Runs channels hard", outOfPossessionFit: "Raw pressing tools", characterNote: "Rapid rise from Albacete", realism: "Difficult", verdict: "Massive upside, but Leverkusen would tax Bayern heavily." },
   { id: "patrik-schick", name: "Patrik Schick", club: "Bayer Leverkusen", shirtNumber: 14, ageMin: 30, ageMax: 31, nationality: "CZE", position: "ST", foot: "Left", fee: { min: 28, max: 40 }, contract: "30/06/2030", ability: 8.2, bayernFit: 7.7, keyTraits: ["finishing", "headers", "left foot"], inPossessionFit: "Box focal point", outOfPossessionFit: "Presses in bursts", characterNote: "Leverkusen leadership figure", realism: "Not recommended", verdict: "Elite finisher, but age, role and pressing fit are weaker." },
+  { id: "valentin-gomez", name: "Valentin Gomez", club: "Real Betis", shirtNumber: null, ageMin: 22, ageMax: 23, nationality: "ARG", position: "CB/LB", foot: "Left", fee: { min: 18, max: 25 }, contract: "Until 2030", ability: 7.4, bayernFit: 7.8, keyTraits: ["left-sided", "duels", "aggression"], inPossessionFit: "Carries and shifts left", outOfPossessionFit: "Hard steps and recovery blocks", characterNote: "Cheap LCB/LB hybrid", realism: "Realistic", verdict: "Useful depth if Bayern want aggression and cover.", need: 68, currentWage: "�1.25m/y", bayernDemand: "�4-6m/y", wageConcern: "Medium" },
+  { id: "juan-miranda", name: "Juan Miranda", club: "Bologna", shirtNumber: null, ageMin: 26, ageMax: 27, nationality: "ESP", position: "LB", foot: "Left", fee: { min: 15, max: 25 }, contract: "30/06/2027", ability: 8.2, bayernFit: 7.4, keyTraits: ["technique", "crossing", "height"], inPossessionFit: "Overlaps and delivers early", outOfPossessionFit: "Solid 1v1, aerial help", characterNote: "Cheap Davies cover", realism: "Realistic", verdict: "Reliable cover, but not a ceiling-raiser.", need: 80, currentWage: "�2.22m/y", bayernDemand: "�5-7m/y", wageConcern: "High" },
+  { id: "samuel-dahl", name: "Samuel Dahl", club: "Benfica", shirtNumber: null, ageMin: 23, ageMax: 24, nationality: "SWE", position: "LB", foot: "Left", fee: { min: 20, max: 25 }, contract: "30/06/2029", ability: 7.7, bayernFit: 7.5, keyTraits: ["speed", "crossing", "energy"], inPossessionFit: "Fast overlaps, safe links", outOfPossessionFit: "Willing presser, smaller frame", characterNote: "Surprise rise from Sweden to Benfica", realism: "Difficult", verdict: "Interesting upside LB, but Benfica premium applies.", need: 75, currentWage: "�2.12m/y", bayernDemand: "�5-8m/y", wageConcern: "Medium" },
+  { id: "kevin-schade", name: "Kevin Schade", club: "Brentford", shirtNumber: 7, ageMin: 23, ageMax: 24, nationality: "GER", position: "LW/ST", foot: "Right", fee: { min: 20, max: 30 }, contract: "30/06/2028", ability: 7.7, bayernFit: 7.6, keyTraits: ["pace", "pressing", "box threat"], inPossessionFit: "Runs in behind constantly", outOfPossessionFit: "Big pressing engine", characterNote: "Very interesting German depth runner", realism: "Realistic", verdict: "Useful if Bayern want pace and pressing over pure flair.", need: 74, currentWage: "�0.52m/y / �10k p/w", bayernDemand: "�5-8m/y", wageConcern: "Medium" },
+  { id: "chris-fuhrich", name: "Chris Fuhrich", club: "VfB Stuttgart", shirtNumber: 27, ageMin: 28, ageMax: 29, nationality: "GER", position: "LW/RW/AM", foot: "Right", fee: { min: 15, max: 25 }, contract: "30/06/2028", ability: 7.6, bayernFit: 7.3, keyTraits: ["clean", "experienced", "rotation"], inPossessionFit: "Safe combinations and width", outOfPossessionFit: "Willing but not elite presser", characterNote: "Safe Bundesliga squad signing", realism: "Realistic", verdict: "Rotation patch, not a future ceiling step.", need: 64, currentWage: "�3.40m/y / �65k p/w", bayernDemand: "�6-8m/y", wageConcern: "Medium" },
+  { id: "crysencio-summerville", name: "Crysencio Summerville", club: "West Ham", shirtNumber: 7, ageMin: 24, ageMax: 25, nationality: "NED", position: "LW/RW", foot: "Right", fee: { min: 30, max: 40 }, contract: "30/06/2029", ability: 7.9, bayernFit: 7.8, keyTraits: ["1v1", "output", "balance"], inPossessionFit: "Good isolation winger", outOfPossessionFit: "Energetic transition runner", characterNote: "Exciting 1v1 threat", realism: "Difficult", verdict: "More dynamic than Fuhrich, still not automatic starter level.", need: 69, currentWage: "�2.34m/y / �45k p/w", bayernDemand: "�6-9m/y", wageConcern: "Medium" },
+  { id: "gabriel-martinelli", name: "Gabriel Martinelli", club: "Arsenal", shirtNumber: 11, ageMin: 25, ageMax: 26, nationality: "BRA", position: "LW", foot: "Right", fee: { min: 60, max: 75 }, contract: "30/06/2027", ability: 8.0, bayernFit: 8.4, keyTraits: ["runs", "pressing", "finishing"], inPossessionFit: "Attacks depth relentlessly", outOfPossessionFit: "Elite work-rate winger", characterNote: "Very professional reputation", realism: "Dream", verdict: "Best football fit, but Arsenal cost makes it nuclear.", need: 84, currentWage: "�9.36m/y / �180k p/w", bayernDemand: "�14-18m/y", wageConcern: "Very High" },
 ];
 
 export const bundesligaProjectedTable: BundesligaProjectedRow[] = [
@@ -286,7 +293,7 @@ export const bundesligaProjectedTable: BundesligaProjectedRow[] = [
   { pos: 8, club: "Freiburg", w: 13, d: 8, l: 13, gf: 49, ga: 49, gd: 0, pts: 47 },
   { pos: 9, club: "Mainz", w: 12, d: 8, l: 14, gf: 45, ga: 50, gd: -5, pts: 44 },
   { pos: 10, club: "Hamburg", w: 10, d: 11, l: 13, gf: 44, ga: 53, gd: -9, pts: 41 },
-  { pos: 11, club: "Borussia Monchengladbach", w: 10, d: 9, l: 15, gf: 47, ga: 57, gd: -10, pts: 39 },
+  { pos: 11, club: "Borussia M�nchengladbach", w: 10, d: 9, l: 15, gf: 47, ga: 57, gd: -10, pts: 39 },
   { pos: 12, club: "Union Berlin", w: 10, d: 7, l: 17, gf: 40, ga: 52, gd: -12, pts: 37 },
   { pos: 13, club: "Augsburg", w: 9, d: 9, l: 16, gf: 42, ga: 58, gd: -16, pts: 36 },
   { pos: 14, club: "Schalke", w: 9, d: 8, l: 17, gf: 41, ga: 59, gd: -18, pts: 35 },

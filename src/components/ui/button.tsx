@@ -14,8 +14,9 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      type={props.type ?? "button"}
       className={cn(
-        "inline-flex items-center justify-center rounded-full font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4af37]/60 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-11 touch-manipulation select-none items-center justify-center rounded-full font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4af37]/60 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:min-h-12",
         size === "sm" && "h-9 px-4 text-sm",
         size === "md" && "h-11 px-5 text-sm",
         size === "lg" && "h-12 px-6 text-base",

@@ -10,6 +10,7 @@ type SetPieceChoice = {
   score: number;
   role: string;
   reason: string;
+  basisLabel: string;
   manual?: boolean;
 };
 
@@ -77,6 +78,9 @@ export function buildBayernSetPiecePlan(
     const chemistryBonus = Math.max(0, impact.chemistry - 72) * 0.03;
     const pressure = profile.pressure;
     const preferenceBonus = preferredRoleBoost(entry.player.name);
+    const fallbackBonus = fallbackRoleBoost(entry.player.name);
+    const basisLabel =
+      entry.kind === "catalog" ? (entry.player.external_source === "manual" ? "Curated fallback" : "Live/free-source data") : "Simulator estimate";
 
     const captainScore =
       profile.rating * 0.22 +
@@ -87,6 +91,7 @@ export function buildBayernSetPiecePlan(
       chemistryBonus +
       leadershipBonus +
       preferenceBonus.captain +
+      fallbackBonus.captain +
       (role === "MID" ? 5.8 : role === "DEF" ? 5.2 : role === "GK" ? 4.8 : 2.5) +
       Math.max(0, 31 - age) * 0.08 -
       Math.max(0, age - 32) * 0.12 +
@@ -102,6 +107,7 @@ export function buildBayernSetPiecePlan(
       technicalBonus +
       footBonus +
       preferenceBonus.penalty +
+      fallbackBonus.penalty +
       (role === "ATT" ? 8.4 : role === "MID" ? 5.8 : role === "DEF" ? 1.3 : 0.2) +
       Math.max(0, 29 - age) * 0.06 -
       Math.max(0, age - 33) * 0.14 +
@@ -117,6 +123,7 @@ export function buildBayernSetPiecePlan(
       deadBallBonus * 0.8 +
       footBonus +
       preferenceBonus.freeKick +
+      fallbackBonus.freeKick +
       (role === "MID" ? 7.2 : role === "ATT" ? 6.6 : role === "DEF" ? 2.4 : 0.4) +
       Math.max(0, 30 - age) * 0.05 -
       Math.max(0, age - 31) * 0.11 +
@@ -131,6 +138,7 @@ export function buildBayernSetPiecePlan(
       technicalBonus * 0.8 +
       deadBallBonus * 0.6 +
       preferenceBonus.corner +
+      fallbackBonus.corner +
       (role === "ATT" ? 7.5 : role === "MID" ? 6.1 : role === "DEF" ? 4.2 : 0.5) +
       Math.max(0, 28 - age) * 0.04 -
       Math.max(0, age - 31) * 0.08 +
@@ -146,6 +154,7 @@ export function buildBayernSetPiecePlan(
       cornerScore,
       summary: profile.summary,
       traits,
+      basisLabel,
     };
   });
 
@@ -234,6 +243,56 @@ function preferredRoleBoost(name: string) {
   };
 }
 
+function fallbackRoleBoost(name: string) {
+  const normalized = normalizeName(name);
+  return {
+    captain:
+      normalized === "manuel neuer"
+        ? 28
+        : normalized === "joshua kimmich"
+          ? 24
+          : normalized === "jonathan tah"
+            ? 16
+            : normalized === "harry kane"
+              ? 12
+              : 0,
+    penalty:
+      normalized === "harry kane"
+        ? 34
+        : normalized === "jamal musiala"
+          ? 14
+          : normalized === "joshua kimmich"
+            ? 10
+            : normalized === "michael olise"
+              ? 8
+              : normalized === "luis diaz"
+                ? 4
+                : 0,
+    freeKick:
+      normalized === "michael olise"
+        ? 24
+        : normalized === "harry kane"
+          ? 16
+          : normalized === "joshua kimmich"
+            ? 14
+            : normalized === "jamal musiala"
+              ? 10
+              : 0,
+    corner:
+      normalized === "michael olise"
+        ? 20
+        : normalized === "joshua kimmich"
+          ? 16
+          : normalized === "aleksandar pavlovic"
+            ? 10
+            : normalized === "tom bischof"
+              ? 10
+              : normalized === "jamal musiala"
+                ? 6
+                : 0,
+  };
+}
+
 function orderedBoost(name: string, order: string[]) {
   const index = order.findIndex((item) => item === name);
   if (index === -1) return 0;
@@ -263,6 +322,7 @@ function pickBest(
     cornerScore: number;
     summary: string;
     traits: string[];
+    basisLabel: string;
   }>,
   kind: "captain" | "penalty" | "freeKick" | "corner",
   used: string | string[] = [],
@@ -303,6 +363,7 @@ function pickBest(
     score: 0,
     summary: "",
     traits: [],
+    basisLabel: "Simulator estimate",
     manual: false,
   };
 }
@@ -315,6 +376,7 @@ function toChoice(
     role: string;
     summary: string;
     traits: string[];
+    basisLabel: string;
     manual?: boolean;
   },
   label: string,
@@ -325,13 +387,15 @@ function toChoice(
     name: item.name,
     score: Math.round(item.score),
     role: item.role,
-    reason: item.manual ? `${reason} Manually selected by the director.` : reason,
+    reason: item.manual ? `${reason} Manually selected by the director.` : `${reason} ${item.basisLabel}.`,
+    basisLabel: item.basisLabel,
     manual: item.manual,
   };
 }
 
 function buildReason(
   item: {
+    name: string;
     role: string;
     summary: string;
     traits: string[];
@@ -339,7 +403,11 @@ function buildReason(
   label: string,
 ) {
   const traits = item.traits.join(", ");
+  const normalizedName = normalizeName(item.name);
   if (label === "Captain") {
+    if (normalizedName === "manuel neuer" || normalizedName === "joshua kimmich") {
+      return `${item.name} is the clearest leadership anchor.`;
+    }
     return item.role === "MID"
       ? "Control, leadership and structure."
       : item.role === "DEF"
@@ -349,6 +417,15 @@ function buildReason(
           : "Experience and on-pitch authority.";
   }
   if (label === "Penalty taker") {
+    if (normalizedName === "harry kane") {
+      return "Elite penalty profile, striker authority, and the safest finisher from the spot.";
+    }
+    if (normalizedName === "joshua kimmich") {
+      return "Calm, technically secure, and a strong secondary option.";
+    }
+    if (normalizedName === "michael olise" || normalizedName === "jamal musiala") {
+      return "Technical quality and enough composure to stay in the conversation.";
+    }
     return item.role === "ATT"
       ? "Best finishing profile under pressure."
       : item.role === "MID"
@@ -356,9 +433,18 @@ function buildReason(
         : "Backup option if the frontline is unavailable.";
   }
   if (label === "Free-kick taker") {
+    if (normalizedName === "michael olise") {
+      return "Clean delivery, shape on the ball, and the clearest dead-ball profile.";
+    }
+    if (normalizedName === "harry kane" || normalizedName === "joshua kimmich") {
+      return "Reliable technique and top-level delivery from distance.";
+    }
     return traits.includes("vision") || traits.includes("technique") || traits.includes("passing")
       ? "Technique and delivery."
       : "Reliable technique and placement.";
+  }
+  if (normalizedName === "michael olise" || normalizedName === "joshua kimmich" || normalizedName === "aleksandar pavlovic" || normalizedName === "tom bischof") {
+    return "Delivery, placement and repeatable corner quality.";
   }
   return traits.includes("crossing") || traits.includes("delivery") || traits.includes("vision")
     ? "Delivery, touch and good crossing rhythm."

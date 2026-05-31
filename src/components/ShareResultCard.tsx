@@ -16,6 +16,14 @@ export function ShareResultCard({
   boardRating,
   fanRating,
   transferVerdict,
+  bestDecision,
+  worstDecision,
+  keyTurningPoint,
+  mediaHeadline,
+  transferGrade,
+  boardVerdict,
+  fanVerdict,
+  whyThisHappened,
   topScorer,
   topAssister,
   bestPlayer,
@@ -37,6 +45,14 @@ export function ShareResultCard({
   boardRating: number;
   fanRating: number;
   transferVerdict: string;
+  bestDecision: string;
+  worstDecision: string;
+  keyTurningPoint: string;
+  mediaHeadline: string;
+  transferGrade: string;
+  boardVerdict: string;
+  fanVerdict: string;
+  whyThisHappened: string;
   topScorer: string;
   topAssister: string;
   bestPlayer: string;
@@ -50,6 +66,17 @@ export function ShareResultCard({
   highlights?: ResultLine[];
   fanPulse?: ResultLine[];
 }) {
+  const compactWhy = compactText(whyThisHappened, 180);
+  const compactBest = compactText(bestDecision, 72);
+  const compactWorst = compactText(worstDecision, 72);
+  const compactTurningPoint = compactText(keyTurningPoint, 72);
+  const compactHeadline = compactText(mediaHeadline, 72);
+  const compactTransferVerdict = compactText(transferVerdict, 96);
+  const compactBoardVerdict = compactText(boardVerdict, 72);
+  const compactFanVerdict = compactText(fanVerdict, 72);
+  const compactPokal = compactCupLine(pokalLine);
+  const compactUcl = compactCupLine(uclLine);
+
   return (
     <Card className="overflow-hidden border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
       <div className="bg-[linear-gradient(135deg,#0f172a,#7f1d1d_55%,#b80d19)] px-6 py-5 text-white">
@@ -57,7 +84,7 @@ export function ShareResultCard({
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-2xl font-black tracking-tight">{clubName}</p>
-            <p className="mt-1 text-sm text-white/80">Season report snapshot</p>
+            <p className="mt-1 text-sm text-white/80">Final snapshot</p>
           </div>
           <div className="text-right">
             <p className="text-5xl font-black leading-none">{points}</p>
@@ -67,33 +94,33 @@ export function ShareResultCard({
       </div>
 
       <CardHeader className="pb-3">
-        <CardTitle className="text-xl">Season verdict</CardTitle>
+        <CardTitle className="text-xl">Final verdict</CardTitle>
         <CardDescription>{verdict}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4 pb-6">
         <div className="space-y-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Trophy wall</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Trophies</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <SeasonTile
               label="Bundesliga"
-              status={trophies.includes("Bundesliga") ? "Won" : place}
+              status={trophies.includes("Bundesliga") ? "Won" : compactText(place, 18)}
               tone={trophies.includes("Bundesliga") ? "success" : "muted"}
-              subtitle={trophies.includes("Bundesliga") ? "Title secured" : "League finish"}
+              subtitle={trophies.includes("Bundesliga") ? "Title won" : "League finish"}
               accent="league"
             />
             <SeasonTile
               label="DFB-Pokal"
-              status={trophies.includes("DFB-Pokal") ? "Won" : pokalLine}
+              status={trophies.includes("DFB-Pokal") ? "Won" : compactPokal}
               tone={trophies.includes("DFB-Pokal") ? "success" : "muted"}
-              subtitle={trophies.includes("DFB-Pokal") ? "Cup lifted" : "Cup path"}
+              subtitle={trophies.includes("DFB-Pokal") ? "Cup won" : "Cup path"}
               accent="cup"
             />
             <SeasonTile
               label="Champions League"
-              status={trophies.includes("Champions League") ? "Won" : uclLine}
+              status={trophies.includes("Champions League") ? "Won" : compactUcl}
               tone={trophies.includes("Champions League") ? "success" : "muted"}
-              subtitle={trophies.includes("Champions League") ? "Europe conquered" : "Europe path"}
+              subtitle={trophies.includes("Champions League") ? "Europe won" : "Europe path"}
               accent="ucl"
             />
           </div>
@@ -103,6 +130,7 @@ export function ShareResultCard({
           <Badge tone="muted">Trophies {trophies.length}</Badge>
           <Badge tone="muted">Board {boardRating}/100</Badge>
           <Badge tone="muted">Fans {fanRating}/100</Badge>
+          <Badge tone="muted">Grade {compactText(transferGrade, 18)}</Badge>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -113,8 +141,8 @@ export function ShareResultCard({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <MiniStat label="Biggest disappointment" value={disappointment} />
-          <MiniStat label="Transfer verdict" value={transferVerdict} />
+          <MiniStat label="Miss" value={compactText(disappointment, 52)} />
+          <MiniStat label="Window" value={compactTransferVerdict} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -123,16 +151,33 @@ export function ShareResultCard({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <DetailBlock label="DFB-Pokal" value={pokalLine} />
-          <DetailBlock label="Champions League" value={uclLine} />
+          <DetailBlock label="Best move" value={compactBest} />
+          <DetailBlock label="Worst move" value={compactWorst} />
+          <DetailBlock label="Turning point" value={compactTurningPoint} />
+          <DetailBlock label="Headline" value={compactHeadline} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailBlock label="DFB-Pokal" value={compactPokal} />
+          <DetailBlock label="Champions League" value={compactUcl} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <MiniStat label="Board" value={compactBoardVerdict} />
+          <MiniStat label="Fans" value={compactFanVerdict} />
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Why</p>
+          <p className="mt-2">{compactWhy}</p>
         </div>
 
         {fanPulse?.length ? (
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fan pulse</p>
             <div className="grid gap-3">
-              {fanPulse.map((post) => (
-                <div key={post.label} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+              {fanPulse.map((post, index) => (
+                <div key={`${post.label}-${index}`} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold text-slate-950">@tzuianalyse</p>
@@ -149,8 +194,8 @@ export function ShareResultCard({
 
         {highlights?.length ? (
           <div className="space-y-2">
-            {highlights.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+            {highlights.map((item, index) => (
+              <div key={`${item.label}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
                 <p className="mt-1 text-sm font-semibold text-slate-950">{item.value}</p>
               </div>
@@ -160,7 +205,7 @@ export function ShareResultCard({
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 text-[10px] uppercase tracking-[0.22em] text-slate-500">
           <span>Made by @tzuianalyse</span>
-          <span>Season report snapshot</span>
+          <span>Fan-made result</span>
         </div>
       </CardContent>
     </Card>
@@ -251,9 +296,9 @@ function MovementBlock({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {items.length ? (
-          items.map((item) => (
+          items.map((item, index) => (
             <span
-              key={item}
+              key={`${label}-${item}-${index}`}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 tone === "success" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
               }`}
@@ -267,4 +312,33 @@ function MovementBlock({
       </div>
     </div>
   );
+}
+
+function compactText(value: string, maxLength: number) {
+  const text = value.trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function compactCupLine(value: string) {
+  const text = value.trim();
+  if (!text) return text;
+  if (/^lost to /i.test(text)) {
+    const roundMatch = text.match(/in ([^(]+)(?:\s*\(|$)/i);
+    const round = roundMatch?.[1]?.trim() ?? "exit";
+    const score = text.match(/\(([^)]+)\)/)?.[1]?.trim();
+    return `${compactRound(round)} exit${score ? ` ${score}` : ""}`;
+  }
+  return compactText(text, 28);
+}
+
+function compactRound(round: string) {
+  const lowered = round.toLowerCase();
+  if (lowered.includes("round of 16")) return "R16";
+  if (lowered.includes("round 16")) return "R16";
+  if (lowered.includes("quarter")) return "QF";
+  if (lowered.includes("semi")) return "SF";
+  if (lowered.includes("final")) return "Final";
+  if (lowered.includes("league")) return "League";
+  return round;
 }

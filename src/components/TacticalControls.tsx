@@ -48,7 +48,7 @@ export function TacticalControls({
   return (
     <Card className="border-slate-200 bg-white/90 shadow-[0_18px_60px_rgba(15,23,42,0.05)]">
       <CardHeader className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base">Kompany Tactics</CardTitle>
             <CardDescription>These controls change the tactical score, risk profile, and season projection.</CardDescription>
@@ -161,9 +161,15 @@ function ToggleField({
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-sm font-semibold text-slate-950">{label}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
         {options.map((option) => (
-          <Button key={option.value} size="sm" variant={value === option.value ? "default" : "outline"} onClick={() => onChange(option.value)}>
+          <Button
+            key={option.value}
+            size="sm"
+            className="w-full sm:w-auto"
+            variant={value === option.value ? "default" : "outline"}
+            onClick={() => onChange(option.value)}
+          >
             {option.label}
           </Button>
         ))}

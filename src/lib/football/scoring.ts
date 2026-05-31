@@ -5,15 +5,19 @@ import { pokalModel, uclTitleModel } from "../data/bayern2026";
 import { normalizeTactics, tacticalImpact } from "../simulation/tactics";
 import { formationSlots, type FormationKey } from "../simulation/formations";
 import { analyzeBayernLineup, slotFitScore } from "./lineupImpact";
+import { deriveRosterEntryProfile } from "./playerModel";
 
 function currentTactics(summary: SimulationSummary) {
   return normalizeTactics(summary.simulation.tactics_json ?? null);
 }
 
 export function squadBalanceScore(summary: SimulationSummary) {
-  const players = summary.activeRoster
-    .filter((entry): entry is Extract<SimulationSummary["activeRoster"][number], { kind: "catalog" }> => entry.kind === "catalog")
-    .map((entry) => entry.player);
+  const entries = summary.activeRoster;
+  const profiles = entries.map((entry) => ({
+    entry,
+    profile: deriveRosterEntryProfile(entry),
+  }));
+  const players = profiles.map((item) => item.entry.player);
 
   const gk = players.filter((player) => positionBucket(player.position) === "GK").length;
   const def = players.filter((player) => positionBucket(player.position) === "DEF").length;
@@ -27,16 +31,45 @@ export function squadBalanceScore(summary: SimulationSummary) {
     if (age <= 31) return 70;
     return 55;
   });
-  const valueScores = players.map((player) => {
-    const min = player.transfer_value_min_eur_m ?? 0;
-    const max = player.transfer_value_max_eur_m ?? min;
+  const valueScores = entries.map((entry) => {
+    const profile = deriveRosterEntryProfile(entry);
+    const player = entry.player;
+    const catalogPlayer =
+      entry.kind === "catalog"
+        ? (player as {
+            transfer_value_min_eur_m?: number | null;
+            transfer_value_max_eur_m?: number | null;
+          })
+        : null;
+    const signingPlayer =
+      entry.kind === "catalog"
+        ? null
+        : (player as {
+            fee?: number | null;
+          });
+    const min =
+      entry.kind === "catalog"
+        ? catalogPlayer?.transfer_value_min_eur_m ?? 0
+        : typeof signingPlayer?.fee === "number"
+          ? Math.max(6, signingPlayer.fee * 0.06)
+          : 0;
+    const max =
+      entry.kind === "catalog"
+        ? catalogPlayer?.transfer_value_max_eur_m ?? min
+        : typeof signingPlayer?.fee === "number"
+          ? Math.max(min, signingPlayer.fee * 0.12)
+          : min;
     const midpoint = (min + max) / 2;
-    return clamp(42 + midpoint * 0.55, 0, 100);
+    return clamp(36 + midpoint * 0.48 + profile.rating * 0.18, 0, 100);
   });
 
   const eliteSigningBoost = Math.min(
-    12,
-    summary.signings.reduce((sum, signing) => sum + (signing.tactical_fit_score >= 85 ? 4 : signing.tactical_fit_score >= 75 ? 2 : 0), 0),
+    14,
+    summary.signings.reduce((sum, signing) => {
+      const fitBoost = signing.tactical_fit_score >= 88 ? 4.5 : signing.tactical_fit_score >= 80 ? 3 : signing.tactical_fit_score >= 72 ? 1.5 : 0;
+      const needBoost = signing.squad_need_score >= 85 ? 2.5 : signing.squad_need_score >= 72 ? 1.4 : 0;
+      return sum + fitBoost + needBoost;
+    }, 0),
   );
 
   const balance =

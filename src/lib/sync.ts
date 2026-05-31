@@ -18,6 +18,7 @@ import { buildSimulationSummary } from "./simulation/service";
 import { normalizeClub, normalizeMatch, normalizePlayer, normalizeStanding } from "./football/normalize";
 import { calculateConfidence } from "./football/confidence";
 import { bayernTransferCandidates } from "./data/bayern2026";
+import { classifyWageConcern, lookupTransferMarketIntel } from "./data/transferMarketIntel";
 import { evaluateBayernTransferApproval } from "./football/approval";
 import { deriveCatalogPlayerProfile, deriveTransferCandidateProfile } from "./football/playerModel";
 import { defaultTactics } from "./simulation/tactics";
@@ -466,7 +467,13 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
   }
   for (const signing of summary?.signings ?? []) {
     ownedNames.add(signing.player_name.trim().toLowerCase());
-    ownedIds.add(`market:${signing.player_external_id}`.trim().toLowerCase());
+    const rawId = signing.player_external_id.trim().toLowerCase();
+    ownedIds.add(rawId);
+    if (rawId.startsWith("market:")) {
+      ownedIds.add(rawId.slice("market:".length));
+    } else {
+      ownedIds.add(`market:${rawId}`);
+    }
   }
   const baseSummary = {
     simulation: {
@@ -537,6 +544,9 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
       characterNote?: string | null;
       realism?: string | null;
       verdict?: string | null;
+      currentWage?: string | null;
+      bayernDemand?: string | null;
+      wageConcern?: "Low" | "Medium" | "High" | "Very High";
       approval?: ReturnType<typeof evaluateBayernTransferApproval>;
       raw: unknown;
     }> = [];
@@ -544,13 +554,26 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
   const normalizedQuery = query.trim().toLowerCase();
   const marketMatches = bayernTransferCandidates
     .filter((player) => {
-      if (simulationId && ownedNames.has(player.name.trim().toLowerCase())) return false;
+      const playerNameKey = player.name.trim().toLowerCase();
+      const playerIdKey = player.id.trim().toLowerCase();
+      const marketIdKey = `market:${playerIdKey}`;
+      if (simulationId && (ownedNames.has(playerNameKey) || ownedIds.has(playerIdKey) || ownedIds.has(marketIdKey))) return false;
       if (!normalizedQuery) return true;
       return [player.name, player.position, player.nationality, player.club, player.verdict, player.characterNote, ...player.keyTraits]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     })
     .map((player) => {
       const profile = deriveTransferCandidateProfile(player);
+      const intel = lookupTransferMarketIntel(player.name);
+      const need = player.need ?? intel?.need ?? Math.round(player.bayernFit * 9 + (player.ability - 7) * 4);
+      const wageConcern = player.wageConcern ?? classifyWageConcern(intel);
+      const approvalPlayer = {
+        ...player,
+        need,
+        currentWage: intel?.currentWage ?? player.currentWage,
+        bayernDemand: intel?.bayernDemand ?? player.bayernDemand,
+        wageConcern,
+      };
       return {
       id: `market:${player.id}`,
       name: player.name,
@@ -562,7 +585,7 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
       age: Math.round((player.ageMin + player.ageMax) / 2),
       fee: Math.round((player.fee.min + player.fee.max) / 2),
       fit: player.bayernFit * 10,
-      need: Math.round(player.bayernFit * 9 + (player.ability - 7) * 4),
+      need,
       source: "bayern-market",
       confidence: player.ability * 10,
       lowConfidence: player.realism !== "Realistic",
@@ -578,7 +601,10 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
       characterNote: player.characterNote,
       realism: player.realism,
       verdict: player.verdict,
-      approval: evaluateBayernTransferApproval(player, approvalSummary),
+      currentWage: intel?.currentWage ?? null,
+      bayernDemand: intel?.bayernDemand ?? null,
+      wageConcern,
+      approval: evaluateBayernTransferApproval(approvalPlayer, approvalSummary),
       raw: player,
       };
     });
@@ -692,6 +718,7 @@ export async function searchPlayersAcrossSources(query: string, simulationId?: s
     .filter((player) => {
       const key = player.name.toLowerCase();
       if (simulationId && ownedNames.has(key)) return false;
+      if (simulationId && ownedIds.has(player.id.trim().toLowerCase())) return false;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

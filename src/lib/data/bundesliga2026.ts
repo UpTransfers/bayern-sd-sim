@@ -11,7 +11,7 @@ export const bundesligaLeagueModel: CompetitionTeamModel[] = [
   { club: "Freiburg", elo: 1546, overall: 71, attack: 71, defence: 75, midfield: 71, goalkeeper: 73, pressing: 71, possession: 71, transition: 71, setPiece: 72, depth: 71, volatility: 34 },
   { club: "Mainz", elo: 1518, overall: 68, attack: 66, defence: 70, midfield: 68, goalkeeper: 67, pressing: 73, possession: 68, transition: 68, setPiece: 69, depth: 68, volatility: 37 },
   { club: "Hamburg", elo: 1490, overall: 65, attack: 63, defence: 66, midfield: 65, goalkeeper: 64, pressing: 65, possession: 65, transition: 70, setPiece: 60, depth: 65, volatility: 40 },
-  { club: "Borussia Monchengladbach", elo: 1482, overall: 64, attack: 63, defence: 63, midfield: 64, goalkeeper: 63, pressing: 64, possession: 64, transition: 64, setPiece: 59, depth: 64, volatility: 41 },
+  { club: "Borussia Mönchengladbach", elo: 1482, overall: 64, attack: 63, defence: 63, midfield: 64, goalkeeper: 63, pressing: 64, possession: 64, transition: 64, setPiece: 59, depth: 64, volatility: 41 },
   { club: "Union Berlin", elo: 1468, overall: 62, attack: 58, defence: 63, midfield: 62, goalkeeper: 61, pressing: 60, possession: 58, transition: 62, setPiece: 63, depth: 62, volatility: 43 },
   { club: "Augsburg", elo: 1455, overall: 61, attack: 58, defence: 60, midfield: 61, goalkeeper: 60, pressing: 59, possession: 57, transition: 61, setPiece: 56, depth: 61, volatility: 44 },
   { club: "Schalke", elo: 1443, overall: 59, attack: 56, defence: 58, midfield: 57, goalkeeper: 58, pressing: 59, possession: 59, transition: 59, setPiece: 54, depth: 52, volatility: 54 },

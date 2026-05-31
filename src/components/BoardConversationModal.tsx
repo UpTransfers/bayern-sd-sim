@@ -35,8 +35,8 @@ export function BoardConversationModal({
   const stageTone = stage === "greenlight" ? "success" : stage === "negotiation" ? "gold" : stage === "board_review" ? "warning" : "muted";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-8 backdrop-blur-sm">
-      <Card className="w-full max-w-2xl border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.3)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-4 backdrop-blur-sm sm:py-8">
+      <Card className="max-h-[calc(100svh-2rem)] w-full max-w-2xl overflow-y-auto border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.3)]">
         <CardHeader className="border-b border-slate-200 bg-slate-50/90">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -96,16 +96,16 @@ export function BoardConversationModal({
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+          <div className="grid gap-2 pt-2 sm:flex sm:flex-wrap sm:justify-end">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
               Close
             </Button>
             {canProceed ? (
-              <Button onClick={onProceed}>
+              <Button className="w-full sm:w-auto" onClick={onProceed}>
                 {stage === "greenlight" ? "Approve and sign" : stage === "negotiation" ? "Accept board terms" : "Proceed after review"}
               </Button>
             ) : (
-              <Button onClick={onConvince}>
+              <Button className="w-full sm:w-auto" onClick={onConvince}>
                 Present sporting case
               </Button>
             )}

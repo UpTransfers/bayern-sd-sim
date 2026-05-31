@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formationOptions, formationSlots, type FormationKey } from "@/lib/simulation/formations";
-import { formatTransferValueRange, cn } from "@/lib/utils";
+import { formatTransferValueRange } from "@/lib/utils";
 import type { SetPieceSettings, SimulationRosterEntry, TacticalSettings } from "@/lib/types";
 import { TacticalControls } from "@/components/TacticalControls";
 import { deriveRosterEntryProfile } from "@/lib/football/playerModel";
+import { PitchLineup } from "@/components/PitchLineup";
 
 type LineupSlot = { slot: string; playerId: string };
 
@@ -111,6 +112,12 @@ export function FormationBuilder({
     const meta = rosterOptions.find((item) => item.id === selectedId);
     return { slot, meta };
   });
+  const pitchSlots = starters.map((item) => ({
+    slot: item.slot,
+    playerName: item.meta?.playerName,
+    position: item.meta?.position,
+    shirtNumber: item.meta?.shirtNumber,
+  }));
 
   const depthGroups = useMemo(
     () =>
@@ -133,6 +140,12 @@ export function FormationBuilder({
     .filter((player) => !selectedIds.has(player.id))
     .sort((a, b) => b.rating - a.rating || b.form - a.form)
     .slice(0, 4);
+  const benchSlots = benchPool.map((player) => ({
+    slot: player.id,
+    playerName: player.playerName,
+    position: player.position,
+    shirtNumber: player.shirtNumber,
+  }));
   const benchQuality = benchPool.length ? Math.round(benchPool.reduce((sum, player) => sum + player.rating * 0.65 + player.form * 0.35, 0) / benchPool.length) : 0;
 
   return (
@@ -167,31 +180,7 @@ export function FormationBuilder({
 
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
-            <div className="rounded-[1.75rem] border border-emerald-900/20 bg-[linear-gradient(180deg,#16532f_0%,#0f4024_100%)] p-4 text-white shadow-[0_18px_48px_rgba(15,23,42,0.18)]">
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-                <div className="grid gap-3">
-                  {chunkSlots(starters).map((row, rowIndex) => (
-                    <div
-                      key={rowIndex}
-                      className={cn(
-                        "grid gap-2",
-                        row.length === 1
-                          ? "grid-cols-1"
-                          : row.length === 2
-                            ? "grid-cols-1 sm:grid-cols-2"
-                            : row.length === 3
-                              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-                              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
-                      )}
-                    >
-                      {row.map((item) => (
-                        <PitchCard key={item.slot} slot={item.slot} meta={item.meta} />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <PitchLineup formation={formation} slots={pitchSlots} benchSlots={benchSlots} />
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
@@ -403,35 +392,6 @@ export function FormationBuilder({
       </CardContent>
     </Card>
   );
-}
-
-function PitchCard({
-  slot,
-  meta,
-}: {
-  slot: string;
-  meta?: { playerName: string; position: string; shirtNumber: string | number };
-}) {
-  return (
-    <div className="min-h-[7.5rem] rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-center shadow-[0_10px_22px_rgba(0,0,0,0.12)] backdrop-blur-sm">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-white/70">{slot}</p>
-      <p className="mt-2 truncate text-sm font-semibold text-white">{meta?.playerName ?? "Unassigned"}</p>
-      <p className="mt-1 text-[11px] text-white/72">{meta ? `${meta.position} | #${meta.shirtNumber}` : "Select a player"}</p>
-    </div>
-  );
-}
-
-function chunkSlots(starters: Array<{ slot: string; meta?: { playerName: string; position: string; shirtNumber: string | number } }>) {
-  const rows: Array<typeof starters> = [];
-  const gk = starters.filter((item) => item.slot === "GK");
-  const defense = starters.filter((item) => /LB|LCB|CB|RCB|RB|LWB|RWB/.test(item.slot));
-  const midfield = starters.filter((item) => /DM|CM|LM|RM|AM|LAM|RAM|LW|RW/.test(item.slot));
-  const attack = starters.filter((item) => /ST/.test(item.slot));
-  if (gk.length) rows.push(gk);
-  if (defense.length) rows.push(defense);
-  if (midfield.length) rows.push(midfield);
-  if (attack.length) rows.push(attack);
-  return rows;
 }
 
 function classifyCoverageGroup(position: string) {

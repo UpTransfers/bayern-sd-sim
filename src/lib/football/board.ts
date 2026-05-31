@@ -2,36 +2,44 @@ import type { SimulationSummary } from "../types";
 import { clamp } from "../utils";
 import { normalizeTactics, tacticalImpact } from "../simulation/tactics";
 import { analyzeBayernLineup } from "./lineupImpact";
+import { deriveRosterEntryProfile } from "./playerModel";
 
 export function computeBoardConfidence(summary: SimulationSummary) {
   const tactics = tacticalImpact(normalizeTactics(summary.simulation.tactics_json ?? null));
   const lineup = analyzeBayernLineup(summary, normalizeTactics(summary.simulation.tactics_json ?? null));
-  const completed = summary.simulation.completed_tasks.length * 10;
-  const dataScore = summary.simulation.data_confidence * 0.2;
+  const completed = Math.min(6, summary.simulation.completed_tasks.length * 1.4);
+  const dataScore = summary.simulation.data_confidence * 0.16;
+  const activeStrength = rosterStrength(summary.activeRoster);
+  const baselineStrength = rosterStrength(summary.baselineRoster ?? []);
+  const rosterDelta = activeStrength - baselineStrength;
   const transferBalance =
-    summary.signings.length * 3 -
-    summary.soldPlayerIds.length * 2 -
-    summary.loanedPlayerIds.length * 1;
+    summary.signings.length * 1.4 -
+    summary.soldPlayerIds.length * 1.6 -
+    summary.loanedPlayerIds.length * 0.8 +
+    Math.max(0, rosterDelta) * 0.12 -
+    Math.max(0, -rosterDelta) * 0.24;
   const approvalSignals = summary.signings.reduce(
     (score, signing) => {
       const approval = getSigningApproval(signing.raw_json);
       if (!approval) return score;
       const stageBoost =
         approval.stage === "greenlight"
-          ? 4
+          ? 3.5
           : approval.stage === "negotiation"
-          ? 1
+          ? 1.2
           : approval.stage === "board_review"
-          ? -1
-          : -4;
-      const totalBoost = Math.round((approval.total - 50) / 12);
-      const vetoPenalty = approval.vetoReasons?.length ? Math.min(3, approval.vetoReasons.length) : 0;
-      return score + stageBoost + totalBoost - vetoPenalty;
+          ? -1.4
+          : -4.5;
+      const totalBoost = (approval.total - 60) / 14;
+      const fitBoost = (signing.tactical_fit_score - 70) * 0.04 + (signing.squad_need_score - 65) * 0.035;
+      const feeDrag = signing.fee_eur >= 80 ? -2.2 : signing.fee_eur >= 55 ? -0.8 : 0;
+      const vetoPenalty = approval.vetoReasons?.length ? Math.min(4, approval.vetoReasons.length * 1.2) : 0;
+      return score + stageBoost + totalBoost + fitBoost + feeDrag - vetoPenalty;
     },
     0,
   );
-  const depthPenalty = summary.activeRoster.length < 18 ? 10 : summary.activeRoster.length > 30 ? 7 : 0;
-  const tacticalBoost = summary.lineup ? summary.lineup.tactical_score * 0.08 + lineup.control * 0.08 + lineup.chemistry * 0.06 : 0;
+  const depthPenalty = summary.activeRoster.length < 18 ? 10 : summary.activeRoster.length > 30 ? 6 : 0;
+  const tacticalBoost = summary.lineup ? summary.lineup.tactical_score * 0.07 + lineup.control * 0.08 + lineup.chemistry * 0.05 : 0;
   return clamp(
     Math.round(
       46 +
@@ -97,4 +105,15 @@ function getSigningApproval(rawJson: unknown): { total: number; stage?: string; 
     stage: typeof candidate.stage === "string" ? candidate.stage : undefined,
     vetoReasons: Array.isArray(candidate.vetoReasons) ? candidate.vetoReasons.filter((item): item is string => typeof item === "string") : undefined,
   };
+}
+
+function rosterStrength(roster: SimulationSummary["activeRoster"]) {
+  if (!roster.length) return 0;
+  const profiles = roster.map((entry) => deriveRosterEntryProfile(entry));
+  const topGroup = profiles
+    .map((profile) => profile.rating * 0.64 + profile.form * 0.36)
+    .sort((a, b) => b - a)
+    .slice(0, Math.min(11, profiles.length));
+  if (!topGroup.length) return 0;
+  return topGroup.reduce((sum, value) => sum + value, 0) / topGroup.length;
 }

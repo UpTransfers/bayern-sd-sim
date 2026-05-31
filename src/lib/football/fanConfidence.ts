@@ -1,19 +1,23 @@
 import type { SimulationSummary } from "../types";
 import { clamp } from "../utils";
+import { deriveRosterEntryProfile } from "./playerModel";
 
 export function computeFanConfidence(summary: SimulationSummary) {
-  const attackBias =
-    summary.signings.filter((item) => /(forward|wing|att)/i.test(item.position ?? "")).length * 6;
-  const approvalBias = summary.signings.reduce((score, signing) => {
+  const attackBias = summary.signings.filter((item) => /(forward|wing|att|st|rw|lw)/i.test(item.position ?? "")).length * 4.5;
+  const signingBuzz = summary.signings.reduce((score, signing) => {
     const approval = getSigningApproval(signing.raw_json);
     if (!approval) return score;
-    if (approval.stage === "greenlight") return score + Math.min(4, Math.round(approval.total / 25));
-    if (approval.stage === "negotiation") return score + 1;
-    if (approval.stage === "board_review") return score - 1;
-    return score - 3;
+    const stageBoost = approval.stage === "greenlight" ? 2.8 : approval.stage === "negotiation" ? 1.1 : approval.stage === "board_review" ? -1.2 : -3.6;
+    const fitBoost = (signing.tactical_fit_score - 70) * 0.04 + (signing.squad_need_score - 65) * 0.045;
+    const feePenalty = signing.fee_eur >= 80 ? -1.5 : signing.fee_eur >= 55 ? -0.5 : 0;
+    return score + stageBoost + fitBoost + feePenalty + Math.max(0, (approval.total - 60) / 20);
   }, 0);
-  const starSalesPenalty = summary.soldPlayerIds.length * 2.5;
-  const loanPenalty = summary.loanedPlayerIds.length * 1.5;
+  const activeStrength = rosterStrength(summary.activeRoster);
+  const baselineStrength = rosterStrength(summary.baselineRoster ?? []);
+  const strengthSwing = activeStrength - baselineStrength;
+  const starSalesPenalty = Math.max(0, baselineStrength - activeStrength) * 0.38 + summary.soldPlayerIds.length * 1.2;
+  const loanPenalty = summary.loanedPlayerIds.length * 0.8;
+  const academyBoost = summary.loanReturnPool.length * 1.2 + summary.youthProspects.length * 1.5;
   const homeBias = summary.currentStanding ? Math.max(0, 8 - summary.currentStanding.position) : 4;
   const formBoost = summary.recentMatches.length
     ? summary.recentMatches.filter((match) => {
@@ -25,7 +29,7 @@ export function computeFanConfidence(summary: SimulationSummary) {
     : 0;
 
   return clamp(
-    Math.round(50 + attackBias + approvalBias + homeBias + formBoost - starSalesPenalty - loanPenalty),
+    Math.round(48 + attackBias + signingBuzz + academyBoost + homeBias + formBoost + Math.max(-6, strengthSwing * 0.55) - starSalesPenalty - loanPenalty),
     0,
     100,
   );
@@ -49,4 +53,15 @@ function getSigningApproval(rawJson: unknown): { total: number; stage?: string }
     total: candidate.total,
     stage: typeof candidate.stage === "string" ? candidate.stage : undefined,
   };
+}
+
+function rosterStrength(roster: SimulationSummary["activeRoster"]) {
+  if (!roster.length) return 0;
+  const profiles = roster.map((entry) => deriveRosterEntryProfile(entry));
+  const topGroup = profiles
+    .map((profile) => profile.rating * 0.62 + profile.form * 0.38)
+    .sort((a, b) => b - a)
+    .slice(0, Math.min(11, profiles.length));
+  if (!topGroup.length) return 0;
+  return topGroup.reduce((sum, value) => sum + value, 0) / topGroup.length;
 }

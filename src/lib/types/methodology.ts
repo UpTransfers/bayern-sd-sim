@@ -20,6 +20,80 @@ export const CupRoundSchema = z.object({
   winner: z.string().optional(),
 });
 
+export const SeasonMatchResultSchema = z.object({
+  matchId: z.string(),
+  competition: z.enum(["bundesliga", "pokal", "ucl"]),
+  round: z.string().nullable().optional(),
+  opponent: z.string(),
+  home: z.boolean(),
+  scoreFor: z.number(),
+  scoreAgainst: z.number(),
+  extraTime: z.boolean(),
+  penalties: z.boolean(),
+  xgFor: z.number(),
+  xgAgainst: z.number(),
+  turningPoint: z.string().nullable().optional(),
+});
+
+export const SeasonTeamStatsSchema = z
+  .object({
+    leagueMatches: z.number().optional(),
+    leagueWins: z.number().optional(),
+    leagueDraws: z.number().optional(),
+    leagueLosses: z.number().optional(),
+    leagueRecord: z.string().optional(),
+    goalsFor: z.number().optional(),
+    goalsAgainst: z.number().optional(),
+    xgFor: z.number().optional(),
+    xgAgainst: z.number().optional(),
+    cleanSheets: z.number().optional(),
+    failedToScore: z.number().optional(),
+    homePoints: z.number().optional(),
+    awayPoints: z.number().optional(),
+    cupMatches: z.number().optional(),
+    cupWins: z.number().optional(),
+    cupLosses: z.number().optional(),
+    averageGoalsFor: z.number().optional(),
+    averageGoalsAgainst: z.number().optional(),
+    longestUnbeaten: z.number().optional(),
+    longestWinRun: z.number().optional(),
+  })
+  .partial();
+
+export const SeasonPlayerStatSchema = z
+  .object({
+    name: z.string(),
+    position: z.string().nullable().optional(),
+    role: z.enum(["GK", "DEF", "MID", "ATT", "UNK"]),
+    importance: z.string(),
+    apps: z.number().optional(),
+    starts: z.number().optional(),
+    minutes: z.number().optional(),
+    goals: z.number().optional(),
+    assists: z.number().optional(),
+    rating: z.number().optional(),
+    availability: z.number().optional(),
+    note: z.string(),
+  })
+  .partial();
+
+export const SeasonInjuryEventSchema = z
+  .object({
+    playerName: z.string(),
+    issue: z.string(),
+    severity: z.enum(["minor", "medium", "major"]),
+    matchesOut: z.number(),
+    note: z.string(),
+  })
+  .partial();
+
+export const SeasonInjuryReportSchema = z
+  .object({
+    summary: z.string().optional(),
+    events: z.array(SeasonInjuryEventSchema).optional(),
+  })
+  .partial();
+
 export const LeagueRowSchema = z
   .object({
     pos: z.number(),
@@ -102,7 +176,21 @@ export const MethodologySchema = z
         disappointment: z.string().nullish(),
         transferVerdict: z.string().nullish(),
         verdictText: z.string().nullish(),
+        boardVerdict: z.string().nullish(),
+        fanVerdict: z.string().nullish(),
+        whyThisHappened: z.string().nullish(),
+        bestDecision: z.string().nullish(),
+        worstDecision: z.string().nullish(),
+        keyTurningPoint: z.string().nullish(),
+        mediaHeadline: z.string().nullish(),
+        transferGrade: z.string().nullish(),
+        matchResults: z.array(SeasonMatchResultSchema).optional(),
         setPiecePlan: SetPiecePlanSchema.optional(),
+        teamStats: SeasonTeamStatsSchema.optional(),
+        playerStats: z.array(SeasonPlayerStatSchema).optional(),
+        injuryReport: SeasonInjuryReportSchema.optional(),
+        tacticalSummary: z.string().nullish(),
+        availabilitySummary: z.string().nullish(),
       })
       .partial()
       .optional(),

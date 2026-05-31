@@ -21,6 +21,164 @@ export type SourceBadge = {
   available: boolean;
 };
 
+export type PlayerImportance =
+  | "core"
+  | "starter"
+  | "rotation"
+  | "development"
+  | "sellable"
+  | "loan_candidate"
+  | "emergency_depth";
+
+export type WageTier = "low" | "mid" | "high" | "elite" | "superstar";
+
+export type DressingRoomRole =
+  | "leader"
+  | "star"
+  | "connector"
+  | "prospect"
+  | "squad_player"
+  | "loyal_depth"
+  | "unhappy";
+
+export type BoardSaleStance = "retain" | "open_to_sale" | "sale_if_upgrade" | "must_sell" | "block";
+
+export type NegotiationState =
+  | "shortlist"
+  | "scouted"
+  | "offer_opened"
+  | "seller_counter"
+  | "wage_discussion"
+  | "agent_pressure"
+  | "board_review"
+  | "approved"
+  | "rejected"
+  | "walked_away";
+
+export type DecisionImpact = {
+  budgetDelta: number;
+  wageDelta: number;
+  squadDepthDelta: number;
+  boardConfidenceDelta: number;
+  fanConfidenceDelta: number;
+  mediaPressureDelta: number;
+  tacticalFitDelta: number;
+  youthPathwayDelta: number;
+  replacementRisk: number;
+  reasons: string[];
+};
+
+export type BoardMessage = {
+  id: string;
+  type: "approval" | "warning" | "objection" | "deadline" | "request";
+  title: string;
+  body: string;
+  urgency: "low" | "medium" | "high";
+  relatedPlayerId?: string | null;
+  createdAt: string;
+};
+
+export type FanMediaEvent = {
+  id: string;
+  type: "fan" | "media";
+  tone: "positive" | "mixed" | "negative" | "chaotic";
+  headline: string;
+  body: string;
+  relatedPlayerId?: string | null;
+  createdAt: string;
+};
+
+export type SeasonMatchResult = {
+  matchId: string;
+  competition: "bundesliga" | "pokal" | "ucl";
+  round?: string | null;
+  opponent: string;
+  home: boolean;
+  scoreFor: number;
+  scoreAgainst: number;
+  extraTime: boolean;
+  penalties: boolean;
+  xgFor: number;
+  xgAgainst: number;
+  turningPoint?: string | null;
+};
+
+export type SeasonTeamStats = {
+  leagueMatches: number;
+  leagueWins: number;
+  leagueDraws: number;
+  leagueLosses: number;
+  leagueRecord: string;
+  goalsFor: number;
+  goalsAgainst: number;
+  xgFor: number;
+  xgAgainst: number;
+  cleanSheets: number;
+  failedToScore: number;
+  homePoints: number;
+  awayPoints: number;
+  cupMatches: number;
+  cupWins: number;
+  cupLosses: number;
+  averageGoalsFor: number;
+  averageGoalsAgainst: number;
+  longestUnbeaten: number;
+  longestWinRun: number;
+};
+
+export type SeasonPlayerStat = {
+  name: string;
+  position: string | null;
+  role: "GK" | "DEF" | "MID" | "ATT" | "UNK";
+  importance: string;
+  apps: number;
+  starts: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  rating: number;
+  availability: number;
+  note: string;
+};
+
+export type SeasonInjuryEvent = {
+  playerName: string;
+  issue: string;
+  severity: "minor" | "medium" | "major";
+  matchesOut: number;
+  note: string;
+};
+
+export type SeasonInjuryReport = {
+  summary: string;
+  events: SeasonInjuryEvent[];
+};
+
+export type ChallengeMode = {
+  id: string;
+  name: string;
+  description: string;
+  rules: string[];
+  modifierSet: Record<string, number | boolean | string>;
+};
+
+export type Achievement = {
+  id: string;
+  title: string;
+  description: string;
+  category: "trophy" | "finance" | "academy" | "chaos" | "legacy";
+  unlocked: boolean;
+};
+
+export type SaveSlot = {
+  id: string;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+  simulationId: string;
+  modeId?: string | null;
+};
+
 export type DataSourceRecord = {
   id: string;
   source_name: DataSourceName;
@@ -95,6 +253,16 @@ export type PlayerRecord = {
   raw_json: unknown;
   last_synced_at: string | null;
   bayern_category?: "first_team" | "loan_return" | "youth" | "other";
+  player_importance?: PlayerImportance;
+  wage_tier?: WageTier;
+  dressing_room_role?: DressingRoomRole;
+  board_sale_stance?: BoardSaleStance;
+  injury_risk?: number | null;
+  leadership_value?: number | null;
+  academy_pathway_value?: number | null;
+  contract_years_left?: number | null;
+  minutes_expectation?: "starter" | "rotation" | "prospect" | "bench" | null;
+  fan_importance?: number | null;
   transfer_value_min_eur_m?: number | null;
   transfer_value_max_eur_m?: number | null;
   bayern_fit_score?: number | null;
@@ -102,6 +270,9 @@ export type PlayerRecord = {
   traits?: string[] | null;
   personality_note?: string | null;
   foot?: string | null;
+  tactical_role?: string | null;
+  source_label?: string | null;
+  source_note?: string | null;
 };
 
 export type MatchRecord = {
@@ -166,11 +337,17 @@ export type SimulationPlayerDecision = {
   id: string;
   simulation_id: string;
   player_id: string;
+  player_name?: string | null;
   decision_type: "sell" | "loan" | "keep" | "development";
   fee_eur: number | null;
   is_simulator_estimate: boolean;
   confidence_score: number;
   notes: string | null;
+  negotiation_state?: NegotiationState | null;
+  seller_resistance?: number | null;
+  board_reaction?: string | null;
+  fan_reaction?: string | null;
+  replacement_warning?: string | null;
   created_at: string;
 };
 
@@ -187,6 +364,12 @@ export type SimulationSigning = {
   is_simulator_estimate: boolean;
   tactical_fit_score: number;
   squad_need_score: number;
+  negotiation_state?: NegotiationState | null;
+  board_reaction?: string | null;
+  fan_reaction?: string | null;
+  agent_pressure?: number | null;
+  seller_resistance?: number | null;
+  replacement_warning?: string | null;
   raw_json: unknown;
   created_at: string;
 };
@@ -217,6 +400,20 @@ export type SimulationResult = {
   risk_rating: string;
   verdict: string;
   narrative: string;
+  best_decision?: string | null;
+  worst_decision?: string | null;
+  key_turning_point?: string | null;
+  media_headline?: string | null;
+  transfer_grade?: string | null;
+  board_verdict?: string | null;
+  fan_verdict?: string | null;
+  why_this_happened?: string | null;
+  match_results?: SeasonMatchResult[] | null;
+  team_stats?: SeasonTeamStats | null;
+  player_stats?: SeasonPlayerStat[] | null;
+  injury_report?: SeasonInjuryReport | null;
+  tactical_summary?: string | null;
+  availability_summary?: string | null;
   methodology_json: unknown;
   created_at: string;
 };
@@ -283,6 +480,7 @@ export type SimulationSummary = {
   currentStanding: StandingRecord | null;
   recentMatches: MatchRecord[];
   sourceHealth: DataSourceRecord[];
+  baselineRoster?: SimulationRosterEntry[];
   activeRoster: SimulationRosterEntry[];
   sellRoster: SimulationRosterEntry[];
   loanReturnPool: PlayerRecord[];

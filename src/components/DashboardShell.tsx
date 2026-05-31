@@ -15,20 +15,28 @@ import { PreSeasonReview } from "@/components/PreSeasonReview";
 import { SquadTable } from "@/components/SquadTable";
 import { LoanPlanner } from "@/components/LoanPlanner";
 import { TransferSearch } from "@/components/TransferSearch";
-import { BoardConversationModal } from "@/components/BoardConversationModal";
 import { FormationBuilder } from "@/components/FormationBuilder";
 import { BoardInbox } from "@/components/BoardInbox";
 import { DecisionFeed } from "@/components/DecisionFeed";
 import { FinancialSummary } from "@/components/FinancialSummary";
+import { DataHealthDrawer } from "@/components/DataHealthDrawer";
 import { SquadNeedsPanel } from "@/components/SquadNeedsPanel";
+import { SquadDepthMap } from "@/components/SquadDepthMap";
 import { SourceAttribution } from "@/components/SourceAttribution";
 import { DataHealthBadge } from "@/components/DataHealthBadge";
-import type { SetPieceSettings, SimulationSummary, TaskId } from "@/lib/types";
-import { formatCurrencyMillions } from "@/lib/utils";
+import { PlayerDetailModal, type PlayerDetailView } from "@/components/PlayerDetailModal";
+import { TransferNegotiationModal } from "@/components/TransferNegotiationModal";
+import type { PlayerRecord, SetPieceSettings, SimulationRosterEntry, SimulationSummary, TaskId } from "@/lib/types";
+import { formatCurrencyMillions, formatTransferValueRange } from "@/lib/utils";
 import { formationSlots, type FormationKey } from "@/lib/simulation/formations";
 import { defaultTactics, normalizeTactics } from "@/lib/simulation/tactics";
 import type { ReactNode } from "react";
 import type { TransferSearchResult } from "@/components/TransferSearch";
+
+type PlayerDetailTarget =
+  | { kind: "roster"; entry: SimulationRosterEntry }
+  | { kind: "transfer"; result: TransferSearchResult }
+  | { kind: "player"; player: PlayerRecord };
 
 const taskDetails: Record<
   TaskId,
@@ -37,31 +45,31 @@ const taskDetails: Record<
   preseason: {
     number: "01",
     title: "Pre-Season Review",
-    description: "Review the club briefing, current league context, and board objectives.",
+    description: "Read the brief, check the squad, and set the tone.",
     icon: <Target className="h-5 w-5 text-[#b80d19]" />,
   },
   sell: {
     number: "02",
     title: "Sell Players",
-    description: "Move surplus players and recover budget without breaking squad balance.",
+    description: "Trim the squad without weakening the spine.",
     icon: <ShieldCheck className="h-5 w-5 text-[#b80d19]" />,
   },
   loan: {
     number: "03",
     title: "Loan Players",
-    description: "Send young or blocked players out for realistic development minutes.",
+    description: "Send the right players out for real minutes.",
     icon: <Users className="h-5 w-5 text-[#b80d19]" />,
   },
   sign: {
     number: "04",
     title: "Sign Players",
-    description: "Search real players from free sources and complete a Bayern-style transfer window.",
+    description: "Open talks and shape the window.",
     icon: <Sparkles className="h-5 w-5 text-[#b80d19]" />,
   },
   formation: {
     number: "05",
     title: "Set Formation",
-    description: "Choose a tactical shape, assign the XI, and lock the season plan.",
+    description: "Lock the XI, set the shape, and take it into the season.",
     icon: <BarChart3 className="h-5 w-5 text-[#b80d19]" />,
   },
 };
@@ -86,8 +94,10 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
   const [selectedLoanIds, setSelectedLoanIds] = useState<string[]>([]);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [boardConversation, setBoardConversation] = useState<TransferSearchResult | null>(null);
+  const [dataHealthOpen, setDataHealthOpen] = useState(false);
+  const [playerDetailTarget, setPlayerDetailTarget] = useState<PlayerDetailTarget | null>(null);
 
-  async function fetchSummary() {
+  async function fetchSummary(options?: { preserveActiveTask?: boolean }) {
     const response = await fetch(`/api/simulations/${simulationId}`, {
       cache: "no-store",
     });
@@ -101,10 +111,12 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
     setTacticsDraft(normalizeTactics(payload.simulation.tactics_json ?? null));
     setSetPiecesDraft(payload.simulation.set_pieces_json ?? defaultSetPieces());
     setBudgetDraft(payload.simulation.selected_budget_eur);
-    const nextTask = (["preseason", "sell", "loan", "sign", "formation"] as TaskId[]).find(
-      (task) => !payload.simulation.completed_tasks.includes(task),
-    );
-    setActiveTask(nextTask ?? "formation");
+    if (!options?.preserveActiveTask) {
+      const nextTask = (["preseason", "sell", "loan", "sign", "formation"] as TaskId[]).find(
+        (task) => !payload.simulation.completed_tasks.includes(task),
+      );
+      setActiveTask(nextTask ?? "formation");
+    }
     setLoading(false);
   }
 
@@ -171,7 +183,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
     }
   }, [activeTask, searchPlayers, searchLoading, searchResults.length]);
 
-  async function runAction(action: Record<string, unknown>) {
+  async function runAction(action: Record<string, unknown>, options?: { preserveActiveTask?: boolean }) {
     setActionLoading(String(action.action ?? "action"));
     try {
       const response = await fetch(`/api/simulations/${simulationId}`, {
@@ -183,7 +195,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
       if (!response.ok) {
         throw new Error((payload as { error?: string }).error ?? "Action failed");
       }
-      await fetchSummary();
+      await fetchSummary({ preserveActiveTask: options?.preserveActiveTask ?? true });
       return payload as { ok?: boolean; processed?: number; blocked?: number; budgetDelta?: number };
     } finally {
       setActionLoading(null);
@@ -226,28 +238,28 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
   const canSimulate = readinessIssues.length === 0;
   const taskFinishLabel =
     activeTask === "preseason"
-      ? "Mark preseason complete"
+      ? "Close preseason"
       : activeTask === "sell"
-      ? "Mark sales complete"
+      ? "Close sales"
       : activeTask === "loan"
-      ? "Mark loan planning complete"
+      ? "Close loans"
       : activeTask === "sign"
-      ? "Mark transfer market complete"
-      : "Mark tactical setup complete";
+      ? "Close market"
+      : "Lock tactics";
   const boardMessages = useMemo(() => {
     if (!summary) return [];
     const items = [];
     if (summary.soldPlayerIds.length > 3) {
-      items.push({ tone: "warn" as const, title: "Board caution", body: "You have sold a significant portion of the first-team core." });
+      items.push({ tone: "warn" as const, title: "Board caution", body: "Too much of the core has moved out of the building." });
     }
     if (summary.signings.length) {
-      items.push({ tone: "good" as const, title: "Transfer desk", body: "The board acknowledges the completed signings and the direction of travel." });
+      items.push({ tone: "good" as const, title: "Transfer desk", body: "The window has a shape now. The board can see the plan." });
     }
     if (summary.simulation.remaining_budget_eur < summary.simulation.selected_budget_eur * 0.25) {
-      items.push({ tone: "warn" as const, title: "Budget watch", body: "Budget discipline is becoming a board-level issue." });
+      items.push({ tone: "warn" as const, title: "Budget watch", body: "Budget discipline is starting to matter at board level." });
     }
     if (!items.length) {
-      items.push({ tone: "neutral" as const, title: "Briefing", body: "No major reactions yet. Use the task cards to create movement." });
+      items.push({ tone: "neutral" as const, title: "Briefing", body: "No major calls yet. Build the plan before the board asks questions." });
     }
     return items;
   }, [summary]);
@@ -256,6 +268,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
   const transferIncome = summary?.decisions.filter((item) => item.decision_type === "sell").reduce((sum, item) => sum + (item.fee_eur ?? 0), 0) ?? 0;
   const squadSize = summary?.activeRoster.length ?? 0;
   const dataHealthStatus = summary?.sourceHealth ?? [];
+  const hasFallbackData = dataHealthStatus.some((source) => source.health_status !== "healthy");
   const lastSync = [...dataHealthStatus]
     .map((source) => source.last_checked_at)
     .filter(Boolean)
@@ -263,6 +276,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
     .at(-1) ?? null;
 
   const lineupSlots = formationSlots(formation);
+  const playerDetail = useMemo(() => buildPlayerDetail(playerDetailTarget), [playerDetailTarget]);
 
   function rosterNeeds() {
     if (!summary) return [];
@@ -331,65 +345,88 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
     await runAction({ action: "completeTask", taskId });
   }
 
-  async function handleSearchAndSign(result: TransferSearchResult) {
-    const requiresConversation =
-      result.lowConfidence ||
-      result.approval?.stage === "negotiation" ||
-      result.approval?.stage === "board_review" ||
-      Boolean(result.approval?.hardBlock);
+  async function handleOpenNegotiation(result: TransferSearchResult) {
+    setBoardConversation(result);
+  }
 
-    if (requiresConversation) {
-      setBoardConversation(result);
-      return;
+  function handleInspectRosterEntry(entry: SimulationRosterEntry) {
+    setPlayerDetailTarget({ kind: "roster", entry });
+  }
+
+  function handleInspectTransferResult(result: TransferSearchResult) {
+    setPlayerDetailTarget({ kind: "transfer", result });
+  }
+
+  function handleInspectPlayerRecord(player: PlayerRecord) {
+    setPlayerDetailTarget({ kind: "player", player });
+  }
+
+  async function commitNegotiation(payload: {
+    negotiation: {
+      openingFeeEurM: number;
+      sellerCounterEurM: number;
+      wageDemandTier: "low" | "mid" | "high" | "elite" | "superstar";
+      boardStance: "approved" | "approved_after_negotiation" | "needs_sales" | "board_review" | "rejected";
+      sellerResistance: number;
+      reasons: string[];
+    };
+    action: "accept" | "improve" | "walk_away";
+    finalFeeEurM: number | null;
+    status: "accepted" | "improved" | "walked_away" | "rejected";
+    message: string;
+    reasons: string[];
+  }) {
+    if (!boardConversation) return { success: false, message: "Transfer failed: no player is selected.", reasons: ["Open talks again from the market card."] };
+    if (payload.action === "walk_away") {
+      await runAction({
+        action: "recordNegotiation",
+        player: boardConversation,
+        negotiation: payload,
+      });
+      setActionNotice(`Talks ended with ${boardConversation.name}. No transfer completed.`);
+      return { success: true, message: "Talks ended. No transfer completed.", reasons: payload.reasons.slice(0, 3) };
     }
 
-    await runAction({ action: "sign", player: result });
-  }
+    if (payload.status === "rejected") {
+      await runAction({
+        action: "recordNegotiation",
+        player: boardConversation,
+        negotiation: payload,
+      });
+      setActionNotice(`${boardConversation.name}: ${payload.message}`);
+      return { success: false, message: payload.message, reasons: payload.reasons.slice(0, 3) };
+    }
 
-  async function handleBulkSearchSign(results: TransferSearchResult[]) {
-    if (!results.length) return;
-    const payload = await runAction({
-      action: "sign",
-      players: results,
-    });
-    const blocked = payload?.blocked ?? 0;
-    const processed = payload?.processed ?? results.length;
-    setActionNotice(blocked ? `Signed ${processed} players, ${blocked} blocked by budget or approval.` : `Signed ${processed} players.`);
-  }
-
-  async function proceedWithBoardConversation() {
-    if (!boardConversation) return;
-    await runAction({
+    const result = (await runAction({
       action: "sign",
       player: boardConversation,
-      boardResponse: {
-        stage: boardConversation.approval?.stage ?? "greenlight",
-        note: boardConversation.approval?.conversationSummary ?? (boardConversation.lowConfidence ? "Low-confidence scouting estimate accepted." : "Proceeding without further negotiation."),
-      },
-    });
-    setBoardConversation(null);
-  }
-
-  async function convinceBoardConversation() {
-    if (!boardConversation) return;
-    await runAction({
-      action: "sign",
-      player: boardConversation,
-      boardResponse: {
-        stage: "convince",
-        note: `Director presentation: ${boardConversation.name} is framed as a strategic Bayern fit, not a panic buy. Wage ladder and squad role must stay controlled.`,
-      },
-    });
-    setBoardConversation(null);
+      negotiation: payload,
+    })) as {
+      ok?: boolean;
+      processed?: number;
+      blocked?: number;
+      blockedDetails?: Array<{ id: string; name: string; reason: string }>;
+    };
+    if ((result.processed ?? 0) <= 0) {
+      const reason = result.blockedDetails?.[0]?.reason ?? "Transfer failed";
+      const message = classifyTransferFailure(reason);
+      setActionNotice(`${boardConversation.name}: ${message}`);
+      return { success: false, message, reasons: [reason, ...payload.reasons].slice(0, 3) };
+    }
+    setActionNotice(`Deal agreed. ${boardConversation.name} joins the squad.`);
+    return { success: true, message: "Deal agreed. The player joins the squad.", reasons: payload.reasons.slice(0, 3) };
   }
 
   async function handleFormationSave() {
-    const payload = await runAction({
-      action: "setFormation",
-      formation,
-      lineup,
-    });
-    setActionNotice(`Formation saved: ${formation} with ${lineup.length} players.`);
+    const payload = await runAction(
+      {
+        action: "setFormation",
+        formation,
+        lineup,
+      },
+      { preserveActiveTask: true },
+    );
+    setActionNotice(`Formation saved. Set Formation stays open (${formation}, ${lineup.length}/11).`);
     return payload;
   }
 
@@ -534,6 +571,15 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
             <Badge className="bg-white/12 text-white border-white/20">Tasks {completedCount}/5</Badge>
             <Badge className="bg-white/12 text-white border-white/20">Board {summary.simulation.board_confidence}%</Badge>
             <DataHealthBadge sources={dataHealthStatus} />
+            <Badge className={`border-white/20 ${hasFallbackData ? "bg-amber-400/15 text-amber-50" : "bg-emerald-400/15 text-emerald-50"}`}>
+              {hasFallbackData ? "Curated fallback active" : "Live source data"}
+            </Badge>
+            {summary.simulation.data_confidence < 100 ? (
+              <Badge className="bg-white/12 text-white border-white/20">Simulator estimate</Badge>
+            ) : null}
+            <Button variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setDataHealthOpen(true)}>
+              Data health
+            </Button>
           </div>
         </div>
       </header>
@@ -582,9 +628,9 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Command center</p>
-                  <p className="mt-1 text-xl font-black text-slate-950">Simulate 2026-27 Season</p>
+                  <p className="mt-1 text-xl font-black text-slate-950">Run the season</p>
                   <p className="mt-1 text-sm text-slate-600">
-                    The season only unlocks after formation, tactics, starting XI, and set-piece roles have been saved.
+                    The board wants formation, tactics, the XI, and set pieces locked before it signs off on the season.
                   </p>
                   {actionNotice ? (
                     <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -631,7 +677,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
                       disabled={!canSimulate || actionLoading !== null}
                       className="w-full shadow-[0_18px_40px_rgba(212,175,55,0.24)] sm:w-auto"
                     >
-                      Simulate 2026-27 Season
+                      Simulate season
                       <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
@@ -643,7 +689,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
               <Card className="border-amber-200 bg-amber-50/70">
                 <CardContent className="p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Simulation locked</p>
-                  <p className="mt-1 text-sm text-amber-900">Finish these items before running the season:</p>
+                  <p className="mt-1 text-sm text-amber-900">The board wants these locked before the season can run:</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {readinessIssues.map((issue) => (
                       <Badge key={issue} tone="warning" className="normal-case tracking-normal">
@@ -679,6 +725,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
                 onBulkSell={handleBulkSell}
                 onBulkLoan={handleBulkLoan}
                 onClearSelection={() => setSelectedSellIds([])}
+                onInspectPlayer={handleInspectRosterEntry}
               />
             ) : null}
 
@@ -699,6 +746,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
                 onBulkSell={handleBulkSell}
                 onBulkDevelopment={handleBulkDevelop}
                 onClearSelection={() => setSelectedLoanIds([])}
+                onInspectPlayer={handleInspectPlayerRecord}
               />
             ) : null}
 
@@ -709,8 +757,8 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
                 results={searchResults}
                 onSearch={searchPlayers}
                 loading={searchLoading}
-                onSign={handleSearchAndSign}
-                onSignMany={handleBulkSearchSign}
+                onOpenNegotiation={handleOpenNegotiation}
+                onInspectPlayer={handleInspectTransferResult}
               />
             ) : null}
 
@@ -767,17 +815,56 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
               transferSpend={transferSpend}
               transferIncome={transferIncome}
             />
+            <SquadDepthMap roster={summary.activeRoster} />
             <SquadNeedsPanel needs={rosterNeeds()} />
             <DecisionFeed events={summary.feed} />
           </div>
         </section>
       </main>
-      <BoardConversationModal
+      <PlayerDetailModal
+        open={Boolean(playerDetail)}
+        player={playerDetail}
+        onClose={() => setPlayerDetailTarget(null)}
+        onSell={
+          playerDetailTarget?.kind === "transfer"
+            ? undefined
+            : playerDetailTarget
+              ? () =>
+                  void (async () => {
+                    await runAction({ action: "sell", playerId: playerTargetId(playerDetailTarget) });
+                    setPlayerDetailTarget(null);
+                  })()
+              : undefined
+        }
+        onLoan={
+          playerDetailTarget?.kind === "transfer"
+            ? undefined
+            : playerDetailTarget
+              ? () =>
+                  void (async () => {
+                    await runAction({ action: "loan", playerId: playerTargetId(playerDetailTarget) });
+                    setPlayerDetailTarget(null);
+                  })()
+              : undefined
+        }
+        onOpenNegotiation={
+          playerDetailTarget?.kind === "transfer"
+            ? () => {
+                handleOpenNegotiation(playerDetailTarget.result);
+                setPlayerDetailTarget(null);
+              }
+            : undefined
+        }
+      />
+      <DataHealthDrawer open={dataHealthOpen} sources={dataHealthStatus} onClose={() => setDataHealthOpen(false)} />
+      <TransferNegotiationModal
+        key={boardConversation?.id ?? "closed-transfer-talks"}
         transfer={boardConversation}
-        lowConfidence={boardConversation?.lowConfidence ?? false}
+        summary={summary}
+        open={Boolean(boardConversation)}
         onClose={() => setBoardConversation(null)}
-        onProceed={proceedWithBoardConversation}
-        onConvince={convinceBoardConversation}
+        onAccept={commitNegotiation}
+        onWalkAway={commitNegotiation}
       />
     </div>
   );
@@ -790,6 +877,17 @@ function defaultSetPieces(): SetPieceSettings {
     freeKickTakerId: null,
     cornerTakerId: null,
   };
+}
+
+function classifyTransferFailure(reason: string) {
+  const text = reason.toLowerCase();
+  if (/budget|insufficient/.test(text)) return "Needs more budget.";
+  if (/wage/.test(text)) return "Wage package rejected.";
+  if (/already signed|unavailable|duplicate/.test(text)) return "Already signed / unavailable.";
+  if (/unrealistic|not interested|club refuses/.test(text)) return "Deal unrealistic.";
+  if (/seller|counter/.test(text)) return "Seller rejected offer.";
+  if (/board|approval|blocked|review|rejected/.test(text)) return "Rejected by board.";
+  return "Transfer failed.";
 }
 
 function computeSimulationReadinessIssues(
@@ -839,4 +937,338 @@ function lineupSignature(formation: string, lineup: Array<{ slot: string; player
     .sort((a, b) => a.slot.localeCompare(b.slot))
     .map((item) => `${item.slot}:${item.playerId}`)
     .join(",")}`;
+}
+
+function playerTargetId(target: PlayerDetailTarget) {
+  if (target.kind === "roster") return target.entry.id;
+  if (target.kind === "player") return target.player.id;
+  return target.result.id;
+}
+
+function buildPlayerDetail(target: PlayerDetailTarget | null): PlayerDetailView | null {
+  if (!target) return null;
+
+  if (target.kind === "transfer") {
+    const result = target.result;
+    return {
+      id: result.id,
+      name: result.name,
+      position: result.position,
+      age: result.age,
+      shirtNumber: result.shirtNumber,
+      categoryLabel: "Transfer target",
+      valueLabel: formatCurrencyMillions(result.fee),
+      sourceLabel: result.lowConfidence ? "Simulator estimate" : friendlySourceName(result.source),
+      sourceTone: result.lowConfidence ? "gold" : "success",
+      sourceNote: result.approval?.wagePressureNote ?? "Simulator estimate from the transfer model.",
+      importanceLabel: needLabel(result.need),
+      wageTierLabel: result.wageConcern ? `${result.wageConcern} wage` : "Unknown",
+      dressingRoomRoleLabel: null,
+      tacticalRoleLabel: null,
+      boardSaleStanceLabel: null,
+      injuryRisk: result.lowConfidence ? 34 : 22,
+      leadershipValue: null,
+      academyPathwayValue: null,
+      contractYearsLeft: parseContractYearsLeft(result.contract),
+      minutesExpectation: null,
+      notes: [
+        result.verdict ?? result.characterNote ?? "No scouting note available.",
+        result.approval?.wagePressureNote ?? "Approval details are generated by the simulator.",
+        result.approval?.positionContext ?? "No extra context available.",
+      ].filter(Boolean),
+      badges: [
+        { label: result.lowConfidence ? "Simulator estimate" : "Curated target", tone: result.lowConfidence ? "gold" : "success" },
+        { label: needLabel(result.need), tone: needTone(result.need) },
+        result.wageConcern ? { label: result.wageConcern, tone: wageConcernTone(result.wageConcern) } : null,
+      ].filter(Boolean) as PlayerDetailView["badges"],
+    };
+  }
+
+  if (target.kind === "roster") {
+    if (target.entry.kind === "catalog") {
+      const player = target.entry.player;
+      const importance = inferImportanceLike(
+        player.player_importance ?? null,
+        player.bayern_category ?? null,
+        player.age,
+        player.transfer_value_min_eur_m,
+        player.transfer_value_max_eur_m,
+        player.position,
+      );
+      const sourceLabel =
+        player.source_label ??
+        (player.external_source === "manual" ? "Curated fallback data" : friendlySourceName(player.external_source));
+      const valueLabel =
+        player.transfer_value_min_eur_m !== null || player.transfer_value_max_eur_m !== null
+          ? `${player.external_source === "manual" ? "External reference value: " : ""}${formatTransferValueRange(
+              player.transfer_value_min_eur_m ?? null,
+              player.transfer_value_max_eur_m ?? null,
+            )}`
+          : "Simulator estimate";
+
+      return {
+        id: player.id,
+        name: player.name,
+        position: player.position,
+        age: player.age,
+        shirtNumber: player.shirt_number,
+        categoryLabel: categoryLabel(player.bayern_category ?? null),
+      valueLabel,
+      sourceLabel,
+      sourceTone: player.external_source === "manual" ? "warning" : "success",
+      sourceNote:
+        player.external_source === "manual"
+          ? player.source_note ?? "Curated fallback data is active for this player."
+          : player.source_note ?? "Live/free-source data.",
+      importanceLabel: importance,
+      wageTierLabel: wageTierLabel(player.wage_tier ?? null, importance),
+      dressingRoomRoleLabel: dressingRoomRoleLabel(player.dressing_room_role ?? null),
+        tacticalRoleLabel: player.tactical_role ?? null,
+        boardSaleStanceLabel: boardSaleStanceLabel(player.board_sale_stance ?? null),
+        injuryRisk: player.injury_risk ?? null,
+        leadershipValue: player.leadership_value ?? null,
+        academyPathwayValue: player.academy_pathway_value ?? null,
+        contractYearsLeft: player.contract_years_left ?? null,
+        minutesExpectation: player.minutes_expectation ?? null,
+        notes: [
+          player.personality_note ?? null,
+          player.source_note ?? null,
+          player.wage_pressure_note ?? null,
+          "Player is sourced from the squad database.",
+        ].filter(Boolean) as string[],
+        badges: [
+          { label: importanceLabel(importance), tone: importanceTone(importance) },
+          { label: sourceLabel, tone: player.external_source === "manual" ? "warning" : "success" },
+          player.injury_risk !== null && player.injury_risk !== undefined
+            ? { label: injuryLabel(player.injury_risk), tone: injuryTone(player.injury_risk) }
+            : null,
+        ].filter(Boolean) as PlayerDetailView["badges"],
+      };
+    }
+
+    const player = target.entry.player;
+    const importance = inferImportanceLike(null, "first_team", player.age, player.fee ?? null, player.fee ?? null, player.position);
+    const valueLabel = player.fee !== null ? `Simulator estimate: ${formatCurrencyMillions(player.fee)}` : "Simulator estimate";
+
+    return {
+      id: player.id,
+      name: player.name,
+      position: player.position,
+      age: player.age,
+      shirtNumber: null,
+      categoryLabel: "Signed player",
+      valueLabel,
+      sourceLabel: "Simulator estimate",
+      sourceTone: "gold",
+      sourceNote: "Simulator estimate from the transfer model.",
+      importanceLabel: importance,
+      wageTierLabel: wageTierLabel(null, importance),
+      dressingRoomRoleLabel: "New signing",
+      tacticalRoleLabel: player.currentClub ? "Unassigned" : "Simulator estimate",
+      boardSaleStanceLabel: null,
+      injuryRisk: player.form !== null && player.form !== undefined ? clampPlayerRisk(32 + Math.round((100 - player.form) * 0.2)) : 30,
+      leadershipValue: null,
+      academyPathwayValue: null,
+      contractYearsLeft: null,
+      minutesExpectation: player.ability !== null && player.ability !== undefined && player.ability >= 80 ? "starter" : "rotation",
+      notes: [
+        player.personalityNote ?? null,
+        "Simulator estimate - no live scouting record.",
+        player.traits?.length ? player.traits.slice(0, 2).join(", ") : null,
+        player.currentClub ? `Signed from ${player.currentClub}.` : "Signed player stored with simulator data.",
+      ].filter(Boolean) as string[],
+      badges: [
+        { label: importanceLabel(importance), tone: importanceTone(importance) },
+        { label: "Simulator estimate", tone: "gold" },
+        player.rating !== null && player.rating !== undefined ? { label: `Rating ${Math.round(player.rating)}`, tone: "muted" } : null,
+      ].filter(Boolean) as PlayerDetailView["badges"],
+    };
+  }
+
+  const player = target.player;
+  const importance = inferImportanceLike(player.player_importance ?? null, player.bayern_category ?? null, player.age, player.transfer_value_min_eur_m, player.transfer_value_max_eur_m, player.position);
+  const sourceLabel =
+    player.source_label ??
+    (player.external_source === "manual" ? "Curated fallback data" : friendlySourceName(player.external_source));
+  const valueLabel =
+    player.transfer_value_min_eur_m !== null || player.transfer_value_max_eur_m !== null
+      ? `${player.external_source === "manual" ? "External reference value: " : ""}${formatTransferValueRange(
+          player.transfer_value_min_eur_m ?? null,
+          player.transfer_value_max_eur_m ?? null,
+        )}`
+      : "Simulator estimate";
+
+  return {
+    id: player.id,
+    name: player.name,
+    position: player.position,
+    age: player.age,
+    shirtNumber: player.shirt_number,
+    categoryLabel: "Loan / development player",
+      valueLabel,
+      sourceLabel,
+      sourceTone: player.external_source === "manual" ? "warning" : "success",
+      sourceNote:
+        player.external_source === "manual"
+          ? player.source_note ?? "Curated fallback data is active for this player."
+          : player.source_note ?? "Live/free-source data.",
+      importanceLabel: importance,
+      wageTierLabel: wageTierLabel(player.wage_tier ?? null, importance),
+      dressingRoomRoleLabel: dressingRoomRoleLabel(player.dressing_room_role ?? null),
+      tacticalRoleLabel: player.tactical_role ?? null,
+      boardSaleStanceLabel: boardSaleStanceLabel(player.board_sale_stance ?? null),
+      injuryRisk: player.injury_risk ?? null,
+      leadershipValue: player.leadership_value ?? null,
+      academyPathwayValue: player.academy_pathway_value ?? null,
+    contractYearsLeft: player.contract_years_left ?? null,
+    minutesExpectation: player.minutes_expectation ?? null,
+    notes: [
+      player.personality_note ?? null,
+      player.source_note ?? null,
+      player.wage_pressure_note ?? null,
+      "Player is in the loan/development pool.",
+    ].filter(Boolean) as string[],
+    badges: [
+      { label: importanceLabel(importance), tone: importanceTone(importance) },
+      { label: sourceLabel, tone: player.external_source === "manual" ? "warning" : "success" },
+      player.injury_risk !== null && player.injury_risk !== undefined
+        ? { label: injuryLabel(player.injury_risk), tone: injuryTone(player.injury_risk) }
+        : null,
+    ].filter(Boolean) as PlayerDetailView["badges"],
+  };
+}
+
+function categoryLabel(category?: string | null) {
+  if (category === "first_team") return "First-team squad";
+  if (category === "loan_return") return "Loan return";
+  if (category === "youth") return "Youth prospect";
+  return "Catalog player";
+}
+
+function importanceLabel(importance: string | null) {
+  if (importance === "core") return "Core";
+  if (importance === "starter") return "Starter";
+  if (importance === "rotation") return "Rotation";
+  if (importance === "development") return "Development";
+  if (importance === "loan_candidate") return "Loan";
+  if (importance === "sellable") return "Sellable";
+  return "Squad";
+}
+
+function importanceTone(importance: string | null) {
+  if (importance === "core" || importance === "starter") return "warning" as const;
+  if (importance === "rotation" || importance === "loan_candidate") return "gold" as const;
+  if (importance === "development") return "success" as const;
+  return "muted" as const;
+}
+
+function needLabel(need: number) {
+  if (need >= 82) return "Need: critical";
+  if (need >= 68) return "Need: high";
+  if (need >= 55) return "Need: medium";
+  return "Need: low";
+}
+
+function needTone(need: number) {
+  if (need >= 82) return "warning" as const;
+  if (need >= 68) return "gold" as const;
+  if (need >= 55) return "muted" as const;
+  return "success" as const;
+}
+
+function wageConcernTone(value: NonNullable<TransferSearchResult["wageConcern"]>) {
+  if (value === "Very High" || value === "High") return "warning" as const;
+  if (value === "Medium") return "gold" as const;
+  return "muted" as const;
+}
+
+function wageTierLabel(tier: string | null, importance: string) {
+  if (tier) {
+    if (tier === "superstar") return "Superstar wage";
+    if (tier === "elite") return "Elite wage";
+    if (tier === "high") return "High wage";
+    if (tier === "mid") return "Mid wage";
+    return "Low wage";
+  }
+  if (importance === "core") return "Elite wage";
+  if (importance === "starter") return "High wage";
+  return "Mid wage";
+}
+
+function dressingRoomRoleLabel(role: string | null) {
+  if (!role) return null;
+  if (role === "leader") return "Leader";
+  if (role === "star") return "Star";
+  if (role === "connector") return "Connector";
+  if (role === "prospect") return "Prospect";
+  if (role === "squad_player") return "Squad player";
+  if (role === "loyal_depth") return "Loyal depth";
+  if (role === "unhappy") return "Unhappy";
+  return role;
+}
+
+function boardSaleStanceLabel(stance: string | null) {
+  if (!stance) return null;
+  if (stance === "retain") return "Board: retain";
+  if (stance === "open_to_sale") return "Board: open";
+  if (stance === "sale_if_upgrade") return "Board: upgrade only";
+  if (stance === "must_sell") return "Board: must sell";
+  if (stance === "block") return "Board: block";
+  return stance;
+}
+
+function parseContractYearsLeft(contract: string | null | undefined) {
+  if (!contract) return null;
+  const match = contract.match(/(\d{4})/);
+  if (!match) return null;
+  const endYear = Number(match[1]);
+  if (!Number.isFinite(endYear)) return null;
+  const currentYear = new Date().getFullYear();
+  return Math.max(0, endYear - currentYear);
+}
+
+function injuryLabel(risk: number) {
+  if (risk >= 65) return "Injury risk: high";
+  if (risk >= 40) return "Injury risk: medium";
+  return "Injury risk: low";
+}
+
+function injuryTone(risk: number) {
+  if (risk >= 65) return "warning" as const;
+  if (risk >= 40) return "gold" as const;
+  return "success" as const;
+}
+
+function clampPlayerRisk(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function friendlySourceName(source: string) {
+  if (source === "openligadb") return "OpenLigaDB";
+  if (source === "football-data") return "football-data.org";
+  if (source === "thesportsdb") return "TheSportsDB";
+  if (source === "wikidata") return "Wikidata";
+  if (source === "manual") return "Curated fallback";
+  return source;
+}
+
+function inferImportanceLike(
+  importance: string | null | undefined,
+  category: string | null | undefined,
+  age: number | null,
+  minValue: number | null | undefined,
+  maxValue: number | null | undefined,
+  position: string | null | undefined,
+) {
+  if (importance) return importance;
+  const fee = Math.max(minValue ?? 0, maxValue ?? 0);
+  const upper = (position ?? "").toUpperCase();
+  if (category === "youth") return "development";
+  if (category === "loan_return" && (age ?? 25) <= 23) return "development";
+  if (fee >= 110 || /GK/.test(upper) && (age ?? 25) >= 30) return "core";
+  if (fee >= 70) return "starter";
+  if (fee >= 35) return "rotation";
+  if ((age ?? 99) <= 21) return "development";
+  if (fee < 18) return "sellable";
+  return "emergency_depth";
 }
