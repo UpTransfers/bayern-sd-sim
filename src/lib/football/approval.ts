@@ -254,8 +254,29 @@ export function evaluateBayernTransferApproval(candidate: TransferCandidate, sum
   );
 
   const bayernIdentity = Math.round(clamp((candidate.bayernFit / 10) * 5 + (candidate.position.includes("DM") ? 0.4 : 0) + (bundesligaFamiliarity ? 0.5 : 0), 0, 5));
+  const realismAdjustment =
+    candidate.realism === "Realistic"
+      ? 3
+      : candidate.realism === "Medium Realistic"
+        ? 1
+        : candidate.realism === "Difficult"
+          ? -2
+          : candidate.realism === "Dream"
+            ? -4
+            : -1;
 
-  const total = sportingNeed + playerQuality + financialRealism + supervisoryBoardAcceptance + marketFeasibility + bayernIdentity;
+  const valueDealBonus =
+    candidate.realism === "Realistic" && candidate.fee.max <= 40 && wageMultiplier <= 1.12 && (strongNeed || strongFit)
+      ? 4
+    : candidate.realism === "Realistic" && candidate.fee.max <= 30 && wageMultiplier <= 1.08
+      ? 3
+    : candidate.realism === "Realistic" && candidate.fee.max <= 35 && wageMultiplier <= 1.25 && strongNeed
+      ? 4
+    : candidate.realism === "Medium Realistic" && candidate.fee.max <= 35 && wageMultiplier <= 1.08 && strongNeed
+      ? 2
+      : 0;
+
+  const total = sportingNeed + playerQuality + financialRealism + supervisoryBoardAcceptance + marketFeasibility + bayernIdentity + realismAdjustment + valueDealBonus;
 
   const wagePressureNote =
     intel
@@ -296,7 +317,7 @@ export function evaluateBayernTransferApproval(candidate: TransferCandidate, sum
       : `Forward targets are expected to create a decisive upgrade, not just add names to the attacking pool.`;
 
   let decision: BayernTransferApproval["decision"] = "Approved";
-  if (total >= 80) decision = "Approved";
+  if (total >= 78 || (valueDealBonus >= 4 && total >= 74) || (candidate.realism === "Realistic" && candidate.fee.max <= 35 && strongNeed && total >= 72)) decision = "Approved";
   else if (total >= 66) decision = "Approved after negotiation";
   else if (total >= 52) decision = "Board review / delayed / depends on sales";
   else if (total >= 36) decision = "Likely rejected";
@@ -313,7 +334,7 @@ export function evaluateBayernTransferApproval(candidate: TransferCandidate, sum
     decision = total < 36 ? "Unrealistic" : "Likely rejected";
   } else if (vetoReasons.length) {
     const severeVeto = vetoReasons.some((reason) => /top-earner|already committed|Age 29\+/.test(reason));
-    if (decision === "Approved" && severeVeto) {
+    if (decision === "Approved" && severeVeto && valueDealBonus < 4) {
       decision = total >= 72 ? "Approved after negotiation" : "Board review / delayed / depends on sales";
     }
     if (total < 52) decision = "Likely rejected";

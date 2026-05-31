@@ -232,7 +232,7 @@ export function simulateUclOutcome(
   const tactics = normalizeTactics(summary.simulation.tactics_json ?? null);
   const lineupImpact = analyzeBayernLineup(summary, tactics);
   const setPiecePlan = buildBayernSetPiecePlan(summary, tactics, lineupImpact);
-  const bayernPower = buildBayernPower(summary, derived, impact, tactics, setPiecePlan) + 7.5;
+  const bayernPower = buildBayernPower(summary, derived, impact, tactics, setPiecePlan) + 6.5;
   const pool = [...uclTitleModel];
   const leaguePhasePoints = simulateLeaguePhase(pool, "Bayern", bayernPower, rng, derived, impact, lineupImpact);
   const leaguePhaseRank = leaguePhasePoints.rank;
@@ -613,35 +613,35 @@ function calibrateLeagueTable(
     if (isBayern) {
       const eliteBase = clamp(
         Math.round(
-          82 +
+          85 +
             ((derived.finishPoints ?? 78) - 78) * 0.35 +
-            (lineupImpact.startingQuality - 80) * 0.42 +
-            (lineupImpact.control - 70) * 0.16 +
-            (lineupImpact.threat - 70) * 0.14 +
+            (lineupImpact.startingQuality - 80) * 0.5 +
+            (lineupImpact.control - 70) * 0.2 +
+            (lineupImpact.threat - 70) * 0.18 +
             (lineupImpact.chemistry - 72) * 0.08 +
-            (lineupImpact.benchQuality - 74) * 0.08 +
+            (lineupImpact.benchQuality - 74) * 0.11 +
             state.seasonSwing * 0.4 -
-            lineupImpact.outOfPositionCount * 0.38 -
+            lineupImpact.outOfPositionCount * 0.46 -
             derived.injuryRisk * 0.06 -
             impact.risk * 0.05 +
             summary.signings.length * 0.2 +
-            blendNoise * 4.4,
+            blendNoise * 5.6,
         ),
-        70,
-        91,
+        73,
+        94,
       );
       const pointFloor = clamp(
         Math.round(
           72 +
             (lineupImpact.startingQuality - 78) * 0.22 +
-            (lineupImpact.benchQuality - 74) * 0.08 -
-            lineupImpact.outOfPositionCount * 1.4 -
+            (lineupImpact.benchQuality - 74) * 0.1 -
+            lineupImpact.outOfPositionCount * 1.5 -
             derived.injuryRisk * 0.05,
         ),
         68,
         80,
       );
-      const pointTarget = clamp(Math.round(eliteBase + (state.points - prior.pts) * 0.04 + seededVariance(rng, -4.6, 5.2)), pointFloor, 93);
+      const pointTarget = clamp(Math.round(eliteBase + (state.points - prior.pts) * 0.04 + seededVariance(rng, -6.2, 6.6)), pointFloor, 96);
       draws = clamp(Math.round(state.draws * 0.58 + prior.d * 0.18 + blendNoise * 0.65), 2, 13);
       wins = clamp(Math.round((pointTarget - draws) / 3), 20, 33);
       points = wins * 3 + draws;

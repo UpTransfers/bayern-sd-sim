@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "FC Bayern Sporting Director Simulator",
-  description: "A real-data powered Bayern sporting director simulator for 2026-27 planning.",
+  description: "A fan-made Bayern sporting director simulator with transparent live data, curated fallback data, and model estimates.",
 };
 
 export default function RootLayout({

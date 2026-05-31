@@ -44,6 +44,8 @@ export function buildSeasonFeed({
   const transferPulse = pulse.find((item) => item.label === "Transfers")?.value ?? transferVerdict;
   const cupPulse = pulse.find((item) => item.label === "Cup mood")?.value ?? verdictLine;
   const stadiumPulse = pulse.find((item) => item.label === "Stadium chat")?.value ?? verdictLine;
+  const keyDecision = summary.result?.best_decision ?? "No single move defined the season.";
+  const worstDecision = summary.result?.worst_decision ?? "No obvious mistake defined the season.";
 
   return [
     {
@@ -66,9 +68,9 @@ export function buildSeasonFeed({
       headline: "Timeline reaction",
       body: shortPost(
         pick(seed, "banter", [
-          `Leute sehen wieder ein paar gute Spiele und tun so, als wäre alles gelöst 😭 ${leaguePulse}`,
+          `Leute sehen wieder ein paar gute Spiele und tun so, als waere alles geloest. ${leaguePulse}`,
           `Kompany mal ruhig machen lassen, bevor wieder jeder zweite Thread den Kader neu sortiert.`,
-          `Das ist so eine typische Bayern-Saison: genug Qualität, um Hoffnung zu machen, und genug Drama für die Replies.`,
+          `Das ist so eine typische Bayern-Saison: genug Qualitaet, um Hoffnung zu machen, und genug Drama fuer die Replies.`,
         ]),
       ),
     },
@@ -76,12 +78,25 @@ export function buildSeasonFeed({
       source: "SebMinga style",
       handle: "@SebMinga",
       tone: "fan",
-      headline: trophies.length ? "Südkurve energy" : "Munich mood",
+      headline: trophies.length ? "Suedkurve energy" : "Munich mood",
       body: shortPost(
         pick(seed, "fan", [
           `Mehr Bayern geht immer, aber diese Saison hatte wenigstens Wucht. ${stadiumPulse}`,
           `Man kann diskutieren, aber wenn Bayern so auftritt, dann lebt das Ding. ${cupPulse}`,
-          `Das ist genau die Art von Saison, über die man in München nicht nur spricht, sondern fühlt. ${transferPulse}`,
+          `Das ist genau die Art von Saison, ueber die man in Muenchen nicht nur spricht, sondern fuehlt. ${transferPulse}`,
+        ]),
+      ),
+    },
+    {
+      source: "analysis",
+      handle: "@tzuianalyse",
+      tone: "analysis",
+      headline: "What actually decided the season",
+      body: shortPost(
+        pick(seed, "analysis", [
+          `The real swing was the gap between ${keyDecision} and ${worstDecision}. That is where the table moved, not in the headlines.`,
+          `The season reads best as a mix of ${transferPulse.toLowerCase()} and the final ${leaguePulse.toLowerCase()}.`,
+          `The numbers say Bayern never fully lost control, but the margin for error was shaped by ${whySummary.toLowerCase()}.`,
         ]),
       ),
     },

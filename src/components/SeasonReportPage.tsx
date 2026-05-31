@@ -255,12 +255,7 @@ export default function SeasonReportPage({ simulationId }: { simulationId: strin
     .filter((item) => item.decision_type === "sell" || item.decision_type === "loan")
     .slice(-4)
     .map((item) => {
-      const name =
-        item.player_name?.trim() ||
-        baselineNameById.get(item.player_id)?.trim() ||
-        rosterNameById.get(item.player_id)?.trim() ||
-        item.player_id ||
-        "Player";
+      const name = resolveDecisionPlayerName(item, baselineNameById, rosterNameById);
       return `${name} - ${item.decision_type === "sell" ? "Sold" : "Loaned"}`;
     });
   const socialFeed = buildSeasonFeed({
@@ -837,6 +832,27 @@ export default function SeasonReportPage({ simulationId }: { simulationId: strin
           </Card>
         </section>
 
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <Card className="border-slate-200 bg-slate-50/80">
+            <CardHeader>
+              <CardTitle>Transparency note</CardTitle>
+              <CardDescription>What is live, what is curated, and what is simulated.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
+              <p>
+                This report is fan-made. Live source data is labeled in the dashboard, fallback research is curated by hand, and season outcomes are simulator
+                estimates.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="muted">Curated fallback</Badge>
+                <Badge tone="muted">Simulator estimate</Badge>
+                <Badge tone="muted">External reference value</Badge>
+                <Badge tone="muted">Estimated wage tier</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         <section className="mx-auto w-full max-w-4xl" ref={shareRef}>
           <ShareResultCard
             clubName="FC Bayern Munich"
@@ -978,20 +994,51 @@ function StatChip({ label, value, subtext }: { label: string; value: string; sub
 
 function KeyLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+    <div className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <span className="text-slate-500">{label}</span>
-      <span className="max-w-[60%] truncate font-semibold text-slate-950">{value}</span>
+      <span className="max-w-full text-left text-sm font-semibold leading-5 text-slate-950 sm:max-w-[60%] sm:text-right">{value}</span>
     </div>
   );
 }
 
 function MiniLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <span className="text-sm text-slate-500">{label}</span>
-      <span className="truncate text-sm font-semibold text-slate-950">{value}</span>
+      <span className="max-w-full text-left text-sm font-semibold leading-5 text-slate-950 sm:text-right">{value}</span>
     </div>
   );
+}
+
+function resolveDecisionPlayerName(
+  item: { player_id: string; player_name?: string | null; notes?: string | null },
+  baselineNameById: Map<string, string>,
+  rosterNameById: Map<string, string>,
+) {
+  const direct = item.player_name?.trim();
+  if (direct) return direct;
+
+  const baseline = baselineNameById.get(item.player_id)?.trim();
+  if (baseline) return baseline;
+
+  const roster = rosterNameById.get(item.player_id)?.trim();
+  if (roster) return roster;
+
+  const noted = item.notes?.match(/(?:Sale tiers|Loan package).*?([A-Z][A-Za-z' -]+)\.?$/)?.[1]?.trim();
+  if (noted) return noted;
+
+  return humanizeDecisionPlayerId(item.player_id);
+}
+
+function humanizeDecisionPlayerId(playerId: string) {
+  return playerId
+    .replace(/^player[_:-]?/i, "")
+    .replace(/^manual[_:-]?/i, "")
+    .replace(/^market:/i, "")
+    .split(/[-_:]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function slotMatchesPosition(slot: string, position: string | null | undefined) {

@@ -345,11 +345,11 @@ export function SimulationResult({ result, summary }: { result: ResultShape; sum
                   />
                   <MiniList
                     title={`Sold (${summary?.decisions.filter((item) => item.decision_type === "sell").length ?? 0})`}
-                    items={topSales.map((item) => rosterNameById.get(item.player_id) ?? humanizePlayerId(item.player_id))}
+                    items={topSales.map((item) => resolveDecisionPlayerName(item, rosterNameById))}
                   />
                   <MiniList
                     title={`Loaned (${loaned.length})`}
-                    items={loaned.map((item) => rosterNameById.get(item.player_id) ?? humanizePlayerId(item.player_id))}
+                    items={loaned.map((item) => resolveDecisionPlayerName(item, rosterNameById))}
                   />
                 </div>
               </Panel>
@@ -436,9 +436,9 @@ function TrophyRow({ label, value, tone }: { label: string; value: string; tone:
 
 function KeyLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <span className="text-slate-500">{label}</span>
-      <span className="max-w-[60%] truncate font-semibold text-slate-950">{value}</span>
+      <span className="max-w-full text-left text-sm font-semibold leading-5 text-slate-950 sm:max-w-[60%] sm:text-right">{value}</span>
     </div>
   );
 }
@@ -448,7 +448,7 @@ function MiniList({ title, items }: { title: string; items: string[] }) {
     <div>
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {items.length ? items.map((item) => <Badge key={item} tone="muted">{item}</Badge>) : <span className="text-sm text-slate-500">None</span>}
+        {items.length ? items.map((item, index) => <Badge key={`${title}-${item}-${index}`} tone="muted">{item}</Badge>) : <span className="text-sm text-slate-500">None</span>}
       </div>
     </div>
   );
@@ -521,4 +521,11 @@ function humanizePlayerId(playerId: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function resolveDecisionPlayerName(
+  item: { player_id: string; player_name?: string | null },
+  rosterNameById: Map<string, string>,
+) {
+  return item.player_name?.trim() || rosterNameById.get(item.player_id)?.trim() || humanizePlayerId(item.player_id);
 }

@@ -277,6 +277,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
 
   const lineupSlots = formationSlots(formation);
   const playerDetail = useMemo(() => buildPlayerDetail(playerDetailTarget), [playerDetailTarget]);
+  const visibleSearchResults = useMemo(() => filterTransferSearchResults(searchResults, summary), [searchResults, summary]);
 
   function rosterNeeds() {
     if (!summary) return [];
@@ -413,6 +414,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
       setActionNotice(`${boardConversation.name}: ${message}`);
       return { success: false, message, reasons: [reason, ...payload.reasons].slice(0, 3) };
     }
+    setSearchResults((current) => filterTransferSearchResults(current, summary).filter((item) => !sameTransferTarget(item, boardConversation)));
     setActionNotice(`Deal agreed. ${boardConversation.name} joins the squad.`);
     return { success: true, message: "Deal agreed. The player joins the squad.", reasons: payload.reasons.slice(0, 3) };
   }
@@ -580,6 +582,9 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
             <Button variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setDataHealthOpen(true)}>
               Data health
             </Button>
+            <p className="w-full text-[11px] leading-5 text-white/75 sm:max-w-3xl">
+              Fan-made simulator. Live data, curated fallback, and model estimates are labeled in-app; wages, values, and squad fit are estimates, not official club data.
+            </p>
           </div>
         </div>
       </header>
@@ -754,7 +759,7 @@ export function DashboardShell({ simulationId }: { simulationId: string }) {
               <TransferSearch
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
-                results={searchResults}
+                results={visibleSearchResults}
                 onSearch={searchPlayers}
                 loading={searchLoading}
                 onOpenNegotiation={handleOpenNegotiation}
@@ -1271,4 +1276,35 @@ function inferImportanceLike(
   if ((age ?? 99) <= 21) return "development";
   if (fee < 18) return "sellable";
   return "emergency_depth";
+}
+
+function filterTransferSearchResults(results: TransferSearchResult[], summary: SimulationSummary | null) {
+  if (!summary) return results;
+  const ownedNames = new Set(summary.activeRoster.map((entry) => entry.player.name.trim().toLowerCase()));
+  const ownedIds = new Set(summary.activeRoster.map((entry) => entry.id.trim().toLowerCase()));
+  for (const signing of summary.signings) {
+    ownedNames.add(signing.player_name.trim().toLowerCase());
+    ownedIds.add(signing.player_external_id.trim().toLowerCase());
+    if (signing.player_external_id.trim().toLowerCase().startsWith("market:")) {
+      ownedIds.add(signing.player_external_id.trim().toLowerCase().slice("market:".length));
+    } else {
+      ownedIds.add(`market:${signing.player_external_id.trim().toLowerCase()}`);
+    }
+  }
+  return results.filter((result) => !isOwnedTransferTarget(result, ownedNames, ownedIds));
+}
+
+function isOwnedTransferTarget(result: TransferSearchResult, ownedNames: Set<string>, ownedIds: Set<string>) {
+  const nameKey = result.name.trim().toLowerCase();
+  const idKey = result.id.trim().toLowerCase();
+  return ownedNames.has(nameKey) || ownedIds.has(idKey) || ownedIds.has(idKey.replace(/^market:/, ""));
+}
+
+function sameTransferTarget(result: TransferSearchResult, other: TransferSearchResult | null) {
+  if (!other) return false;
+  const resultName = result.name.trim().toLowerCase();
+  const otherName = other.name.trim().toLowerCase();
+  const resultId = result.id.trim().toLowerCase();
+  const otherId = other.id.trim().toLowerCase();
+  return resultName === otherName || resultId === otherId || resultId === otherId.replace(/^market:/, "") || otherId === resultId.replace(/^market:/, "");
 }
