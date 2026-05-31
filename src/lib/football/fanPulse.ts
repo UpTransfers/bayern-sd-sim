@@ -110,6 +110,8 @@ function leagueReaction(place: string, points: string, trophies: string[], verdi
           `First place again. The title was expected, but it still needed control to look this clean.`,
           `Bayern finished on top and the fanbase is already moving the goalposts for next season.`,
           `Champions again, but the post-match chat still found a few things to moan about.`,
+          `Title won and half the replies still read like Bayern got away with something.`,
+          `Bayern wins the league and the timeline still finds three reasons to argue.`,
         ]
       : position === 2
         ? [
@@ -117,12 +119,16 @@ function leagueReaction(place: string, points: string, trophies: string[], verdi
           `Runner-up is not the standard, but ${points} points keeps the season from feeling broken.`,
           `The league was good, not ruthless enough. Bayern fans will always treat second as unfinished business.`,
           `A decent season, but the fan timeline is already split between patience and frustration.`,
+          `Second place is enough to start the "who actually watched this team?" discourse.`,
+          `Good season on paper, but the replies are already sharpening the knives.`,
         ]
       : [
           `A finish of ${place} with ${points} points turns every good run into a what-if debate.`,
           `This was a season with some good moments, but the finish still left the Bayern crowd restless.`,
           `The league output landed below the usual Bayern bar, so the verdict is going to be loud.`,
           `The mood is not hostile, but it is definitely not relaxed either.`,
+          `That finish is exactly the kind of thing that turns everyone into a tactical expert by Monday.`,
+          `Not a meltdown, but definitely the kind of ending that feeds every bad faith hot take.`,
         ];
 
   const moodTail =
@@ -155,6 +161,7 @@ function transferReaction(
       `Some fans liked the restraint, others wanted another monster signing. That split is very Bayern.`,
       `The transfers were judged less on noise and more on whether the squad looked stronger on the pitch.`,
       `It felt like a proper sporting-director window: some applause, some debate, and one or two instant verdicts.`,
+      `Low-key signings that actually fit? Rare. Of course half the timeline still wants a bigger name for the dopamine.`,
     );
   }
   if (soldCount > 0) {
@@ -162,6 +169,8 @@ function transferReaction(
       `${soldCount} sale${soldCount === 1 ? "" : "s"} made the squad feel lighter and the board more comfortable.`,
       `The departures were part of the plan, but fans always argue about who should have stayed.`,
       `The exits gave the squad a cleaner shape, even if a few names will be argued about for months.`,
+      `One sale and suddenly everyone becomes a wage-structure expert again.`,
+      `The outgoing list always looks smarter after the first win. Before that, it is pure chaos in the replies.`,
     );
   }
   if (loanCount > 0) {
@@ -169,6 +178,8 @@ function transferReaction(
       `${loanCount} loan${loanCount === 1 ? "" : "s"} kept the pathway open for the younger players.`,
       `The loan decisions made the future clearer, even if not everyone agreed with the short-term depth.`,
       `The loan list quietly tells the real story: Bayern are planning a next step, not just a next match.`,
+      `A decent loan plan usually means one less meltdown thread in September.`,
+      `The kids need minutes, not sympathy. This part at least looks sensible.`,
     );
   }
   if (!variants.length) {
@@ -176,6 +187,7 @@ function transferReaction(
       `No big transfer drama, which is sometimes the most Bayern outcome of all.`,
       `A quiet window can still work if the squad structure stays sharp.`,
       `Not every summer needs fireworks; sometimes the reaction is just a relieved nod.`,
+      `The silence is almost suspicious, but in this case it might actually be competence.`,
     );
   }
   variants.push(
@@ -186,6 +198,7 @@ function transferReaction(
     transferCount >= 4
       ? "That was enough movement to keep the comments section busy all summer."
       : "Some supporters still think the window needed one more headline.",
+    "The timeline never wants balance. It wants one more signing and one more argument.",
   );
   return pick(seed, "transfer", variants);
 }
@@ -201,24 +214,28 @@ function cupReaction(
   if (trophies.includes("DFB-Pokal")) {
     variants.push("The Pokal run ended with silverware, which is exactly how Bayern supporters judge it.");
     variants.push("Cup day did the job, and the replies were pure Bayern entitlement in the best way.");
+    variants.push("Pokal won, and yes, the timeline still found something to complain about. Bayern DNA.");
   } else if (pokal?.round) {
     variants.push(
       pokal.winner && pokal.winner !== "Bayern Munich"
         ? `The Pokal exit in ${pokal.round} kept the cup conversation alive for the wrong reason.`
         : `The Pokal run reached ${pokal.round}, which left the fanbase somewhere between satisfied and annoyed.`,
       `The cup ride had enough chaos to feel real, which is at least better than a scripted walkover.`,
+      `A Pokal exit always hits harder because everybody instantly starts pretending they saw it coming.`,
     );
   }
 
   if (trophies.includes("Champions League")) {
     variants.push("Europe ended with a trophy, so the timeline suddenly looks bigger than the noise.");
     variants.push("That is the sort of Champions League ending that makes a fanbase forget its arguments for a week.");
+    variants.push("UCL won, so the replies moved from crisis mode to victory lap in about six minutes.");
   } else if (ucl?.round) {
     variants.push(
       ucl.winner && ucl.winner !== "Bayern Munich"
         ? `The Champions League exit at ${ucl.round} was the kind of result that gets replayed for weeks.`
         : `The Champions League run got to ${ucl.round}, which keeps the ambition story alive.`,
       `The European run had enough tension to keep the fanbase checking the tie score three times.`,
+      `European nights were eventful enough that nobody gets to say this was boring.`,
     );
   }
 
@@ -227,6 +244,7 @@ function cupReaction(
       "The knockout side of the season still felt like Bayern football: expectant, but never fully safe.",
       "The cup narrative was volatile enough to feel real, which is better than a scripted walkover.",
       "It had enough weird moments to feel like a real Bayern season instead of a clean spreadsheet output.",
+      "This is the kind of knockout run that leaves the comments section acting very wise after the fact.",
     );
   }
 
@@ -234,6 +252,7 @@ function cupReaction(
     Number(points) >= 78
       ? "The cup section will always be judged by the final scoreboard, not the build-up."
       : "The cup section will always be judged by the final scoreboard, not the build-up.",
+    "If you wanted calm, Bayern cup football was the wrong place to look.",
   );
 
   return pick(seed, "cup", variants);
@@ -247,17 +266,20 @@ function stadiumReaction(place: string, trophies: number, unlocked: number, boar
           "The mood in the stands was full of that smug Bayern certainty that only comes with a title.",
           "You could almost hear the collective nod: good, but now do it again.",
           "The crowd looked satisfied, which in Munich is basically a temporary ceasefire.",
+          "Title won and the stadium still feels one bad half away from a debate thread.",
         ]
       : position === 2
         ? [
             "The stadium reaction felt like approval with a raised eyebrow.",
             "Fans gave the season credit, then immediately asked what the next fix is.",
             "There was applause, but it came with a lot of coaching from the seats.",
+            "Second place brings applause, analysis, and at least three angry hot takes before the players leave the pitch.",
           ]
         : [
             "The matchday mood was half patience, half public questioning of the project.",
             "The stands did not turn toxic, but they definitely did not relax either.",
             "It had the kind of energy that keeps every debate alive until August.",
+            "That kind of finish makes every fan suddenly very confident about tactical structure.",
           ];
 
   const modifier =
@@ -284,12 +306,14 @@ function achievementReaction(unlocked: number, trophies: number, seed: string) {
           `The badges matter because Bayern fans still measure seasons by silverware first.`,
           "Winning kept the feed happy, but nobody in Munich ever calls it enough.",
           "The achievement list had enough bite to keep the comment section playful.",
+          "Trophies on the board. Now watch the same people demand a louder summer anyway.",
         ]
       : [
           `${unlocked} achievement${unlocked === 1 ? "" : "s"} were unlocked, but the pressure stayed heavier than the medals.`,
           "The badge hunt helped, but Bayern supporters always want a bigger headline.",
           "Some seasons are remembered by the feeling more than the badge count.",
           "The badges were fun, but they did not stop the demanding questions.",
+          "Nice unlocks, but the reply guys are still asking for receipts.",
         ];
 
   return pick(seed, "achievement", variants);
